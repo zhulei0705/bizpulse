@@ -64,6 +64,8 @@ def _today_count(db: Session) -> int:
 
 
 def _view(db: Session, signal: Signal) -> dict:
+    from app.api.v1.endpoints.signal_analysis import _signal_evidences_view
+
     data = SignalRead.model_validate(signal).model_dump()
     record = db.get(SourceRecord, signal.source_record_id)
     source = db.get(Source, record.source_id) if record else None
@@ -81,6 +83,18 @@ def _view(db: Session, signal: Signal) -> dict:
         "last_verified_at": record.last_verified_at,
     }
     data["company_name"] = db.scalar(select(Company.company_name).where(Company.id == signal.company_id)) if signal.company_id else None
+    # T04 增强：fact/inference 分离、证据链、生命周期、置信度解释
+    data["fact_summary"] = signal.fact_summary
+    data["inference_summary"] = signal.inference_summary
+    data["signal_fingerprint"] = signal.signal_fingerprint
+    data["first_seen_at"] = signal.first_seen_at
+    data["last_seen_at"] = signal.last_seen_at
+    data["created_by"] = signal.created_by
+    data["prompt_version"] = signal.prompt_version
+    data["change_type"] = signal.change_type
+    data["change_value"] = signal.change_value
+    data["evidences"] = _signal_evidences_view(db, signal.id)
+    data["confidence_explanation"] = (signal.payload_json or {}).get("confidence_explanation")
     return data
 
 

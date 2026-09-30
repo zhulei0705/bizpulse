@@ -97,6 +97,37 @@ class LLMAdapter:
         db.commit()
         return insights
 
+    def extract_signals_v2(self, db: Session, source_text: str, source_type: str | None = None, company_context: str | None = None, target_type: str | None = None, target_id: str | None = None) -> list[dict[str, Any]]:
+        """T04 结构化信号提取：输出 Structured JSON（含 evidence_text/fields/fact/inference）。
+
+        evidence_text 校验由调用方（SignalExtractor）执行 —— 找不到原文的条目不得自动批准。
+        """
+        from app.analyzers.prompts import SIGNAL_EXTRACTOR_SYSTEM, SIGNAL_EXTRACTOR_V1
+        user = f"来源类型：{source_type or '未知'}\n企业上下文：{company_context or '无'}\n\n原始文本：\n{source_text[:12000]}"
+        return self._run_structured(db, "signal_extraction_v2", SIGNAL_EXTRACTOR_V1, SIGNAL_EXTRACTOR_SYSTEM, user, target_type, target_id)
+
+    def _run_structured(self, db: Session, module: str, prompt_name: str, prompt_version: str, system: str, user: str, target_type: str | None, target_id: str | None) -> list[dict[str, Any]]:
+        """运行并返回原始结构化 items（不映射为 LLMInsight，保留 fields 等结构）。"""
+        input_hash = hashlib.sha256(user.encode("utf-8")).hexdigest()
+        started = __import__("time").perf_counter()
+        run = LLMRun(module=module, prompt_name=prompt_name, prompt_version=prompt_version, model=self.model, provider="openai-compatible", target_type=target_type, target_id=target_id, input_hash=input_hash)
+        db.add(run)
+        try:
+            data = self._chat(system, user)
+            items = data.get("items", [])
+            items = [item for item in items if isinstance(item, dict)]
+            run.output_json = {"items": items}
+            run.status = "SUCCESS"
+        except Exception as exc:  # noqa: BLE001 —— LLM 失败不允许阻塞分析流程
+            run.status = "FAILED"
+            run.error_message = str(exc)[:2000]
+            db.commit()
+            logger.warning("LLM structured run failed: %s", exc)
+            return []
+        run.duration_seconds = __import__("time").perf_counter() - started
+        db.commit()
+        return items
+
     def extract_signal(self, db: Session, page_title: str, page_text: str, target_type: str | None = None, target_id: str | None = None) -> list[LLMInsight]:
         system = (
             "你是商业信号提取器。只根据给定网页文本提取真实发生的商业事件，禁止编造。"

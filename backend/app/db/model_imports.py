@@ -7,7 +7,7 @@ from app.models.llm_run import LLMRun
 from app.models.market import Market
 from app.models.opportunity import Opportunity, OpportunityEvidence
 from app.models.pain_point import PainPoint, PainPointEvidence
-from app.models.signal import Signal
+from app.models.signal import Signal, SignalCandidate, SignalEvidence
 from app.models.source import Source, SourceRecord
 from app.models.system import SystemConfig
 
@@ -28,6 +28,8 @@ __all__ = [
     "PainPoint",
     "PainPointEvidence",
     "Signal",
+    "SignalCandidate",
+    "SignalEvidence",
     "Source",
     "SourceRecord",
     "SystemConfig",

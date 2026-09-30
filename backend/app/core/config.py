@@ -45,6 +45,15 @@ class Settings(BaseSettings):
     # T03：采集调度（默认关闭，避免开发环境自动访问网络）
     enable_scheduler: bool = False
 
+    # T04：Signal 置信度权重（来源30/Evidence30/规则15/LLM15/企业10，可配置不硬编码）
+    signal_confidence_weights: dict = {
+        "source": 0.30, "evidence": 0.30, "rule": 0.15, "llm": 0.15, "company": 0.10,
+    }
+    # T04：去重时间窗口（天）—— 同事件窗口内合并，不永久合并
+    signal_dedup_window_days: int = 14
+    # T04：Signal 自动批准门槛（confidence≥85 且来源 A/B 且证据原文可寻）
+    signal_auto_approve_threshold: int = 85
+
 
 
 
