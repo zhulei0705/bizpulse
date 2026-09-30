@@ -1,0 +1,358 @@
+/* =====================================================================
+   BizPulse Design V2 —— 依据 UI 设计稿（UI图/*.png）升级
+   视觉对齐设计稿；数据仍全部真实（NO_FAKE_DATA），示意数字一律不采用
+   ===================================================================== */
+
+/* ---------- 全局底色：更深星空感 ---------- */
+:root {
+  --bg-deep: #04070d;
+  --panel-deep: #0a1424;
+  --line-glow: rgba(74, 132, 205, 0.22);
+  --accent-cyan: #29d3ff;
+  --accent-blue: #2f7fff;
+  --accent-purple: #8a5cff;
+  --accent-green: #2ee6a8;
+  --accent-gold: #ffb03a;
+}
+
+html, body, #root {
+  background:
+    radial-gradient(circle at 78% -12%, rgba(20, 70, 150, 0.38) 0, rgba(8, 22, 40, 0.5) 26%, transparent 60%),
+    radial-gradient(circle at 12% 108%, rgba(60, 40, 160, 0.14) 0, transparent 45%),
+    #04070d;
+}
+
+/* ---------- 侧栏：波浪光纹 + 更亮激活态 ---------- */
+.sidebar {
+  background:
+    radial-gradient(120% 46% at 0% 100%, rgba(28, 100, 220, 0.2) 0, transparent 62%),
+    linear-gradient(180deg, #071527 0%, #050f1c 100%);
+}
+.sidebar::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 86px; height: 120px;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 100% at 20% 100%, rgba(41, 211, 255, 0.16), transparent 70%),
+    radial-gradient(50% 90% at 70% 100%, rgba(110, 70, 255, 0.14), transparent 72%);
+  filter: blur(6px);
+  opacity: 0.8;
+  mask-image: linear-gradient(transparent, #000 55%);
+  -webkit-mask-image: linear-gradient(transparent, #000 55%);
+}
+.side-nav { position: relative; z-index: 2; }
+.nav-item { border-radius: 12px; padding: 12px 14px; gap: 14px; }
+.nav-item.active {
+  background: linear-gradient(92deg, rgba(37, 132, 255, 0.95) 0%, rgba(88, 68, 255, 0.78) 100%);
+  border-color: rgba(120, 190, 255, 0.55);
+  box-shadow: 0 6px 26px rgba(25, 131, 255, 0.38), inset 0 0 20px rgba(120, 210, 255, 0.14);
+}
+.slogan-card { position: relative; z-index: 2; border-radius: 14px; }
+
+/* ---------- 顶栏 ---------- */
+.topbar { background: rgba(4, 9, 17, 0.78); border-bottom-color: rgba(74, 132, 205, 0.16); }
+.global-search { border-radius: 999px; height: 40px; border-color: rgba(58, 110, 170, 0.55); background: rgba(9, 22, 38, 0.8); }
+.ai-btn { border-radius: 999px; border-color: rgba(138, 92, 255, 0.7); box-shadow: 0 0 22px rgba(128, 75, 255, 0.22); }
+.user-chip .avatar { box-shadow: 0 0 0 2px rgba(80, 160, 255, 0.4), 0 0 18px rgba(47, 127, 255, 0.35); }
+
+/* ---------- 卡片：发光描边 + 标题图标 ---------- */
+.section-card {
+  border-color: var(--line-glow);
+  background: linear-gradient(160deg, rgba(13, 26, 46, 0.92), rgba(7, 15, 27, 0.95));
+  border-radius: 16px;
+  box-shadow: 0 10px 34px rgba(2, 8, 18, 0.45), inset 0 0 42px rgba(16, 84, 160, 0.05);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.section-card:hover { border-color: rgba(64, 140, 230, 0.38); box-shadow: 0 12px 40px rgba(2, 8, 18, 0.55), 0 0 30px rgba(31, 140, 255, 0.08); }
+.section-head h3 { display: flex; align-items: center; gap: 8px; letter-spacing: 0.3px; }
+.section-head h3 svg { color: #3fb6ff; filter: drop-shadow(0 0 8px rgba(47, 182, 255, 0.5)); }
+.more-link { display: inline-flex; align-items: center; gap: 4px; color: #6fb9e8; font-size: 12px; background: none; border: 0; cursor: pointer; }
+.more-link:hover { color: #9fd8ff; }
+
+/* ---------- StatCard：圆形发光图标底座 ---------- */
+.stat-card { border-radius: 16px; border-color: var(--line-glow); min-height: 108px; }
+.stat-card .stat-icon {
+  width: 54px; height: 54px; border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, rgba(70, 190, 255, 0.4), rgba(35, 90, 220, 0.16) 58%, rgba(10, 30, 70, 0.2));
+  border: 1px solid rgba(90, 180, 255, 0.4);
+  box-shadow: 0 0 24px rgba(41, 160, 255, 0.3), inset 0 0 16px rgba(90, 190, 255, 0.16);
+  color: #5ecdff;
+}
+.stat-card.tone-purple .stat-icon { background: radial-gradient(circle at 32% 28%, rgba(160, 110, 255, 0.42), rgba(90, 50, 220, 0.16) 58%, rgba(30, 16, 70, 0.2)); border-color: rgba(150, 110, 255, 0.42); box-shadow: 0 0 24px rgba(138, 92, 255, 0.3), inset 0 0 16px rgba(160, 110, 255, 0.16); color: #b79bff; }
+.stat-card.tone-cyan .stat-icon { background: radial-gradient(circle at 32% 28%, rgba(60, 225, 255, 0.4), rgba(20, 140, 190, 0.16) 58%, rgba(8, 45, 70, 0.2)); border-color: rgba(70, 205, 255, 0.4); box-shadow: 0 0 24px rgba(41, 211, 255, 0.28), inset 0 0 16px rgba(70, 215, 255, 0.16); color: #4fdcff; }
+.stat-card.tone-gold .stat-icon { background: radial-gradient(circle at 32% 28%, rgba(255, 185, 70, 0.4), rgba(200, 120, 20, 0.16) 58%, rgba(70, 42, 8, 0.2)); border-color: rgba(255, 185, 80, 0.42); box-shadow: 0 0 24px rgba(255, 176, 58, 0.28), inset 0 0 16px rgba(255, 195, 90, 0.16); color: #ffc76b; }
+.stat-card.tone-green .stat-icon { background: radial-gradient(circle at 32% 28%, rgba(60, 235, 180, 0.38), rgba(20, 160, 115, 0.16) 58%, rgba(8, 60, 45, 0.2)); border-color: rgba(70, 225, 175, 0.4); box-shadow: 0 0 24px rgba(46, 230, 168, 0.26), inset 0 0 16px rgba(70, 235, 180, 0.16); color: #52efc0; }
+.stat-card.tone-danger .stat-icon { background: radial-gradient(circle at 32% 28%, rgba(255, 110, 130, 0.38), rgba(190, 40, 65, 0.16) 58%, rgba(70, 10, 22, 0.2)); border-color: rgba(255, 120, 140, 0.4); box-shadow: 0 0 24px rgba(255, 94, 116, 0.26), inset 0 0 16px rgba(255, 120, 140, 0.16); color: #ff8ba0; }
+.stat-copy strong { font-size: 30px; letter-spacing: -0.5px; text-shadow: 0 0 22px rgba(80, 180, 255, 0.25); }
+.stat-card .mini-spark i { background: linear-gradient(#31d3ff, #3f6dff); }
+
+/* ---------- Page Hero：渐变大标题 + 浮动信号卡 ---------- */
+.page-hero { border-radius: 20px; min-height: 210px; border-color: rgba(64, 122, 195, 0.28); background: linear-gradient(100deg, #081426 0%, #0a1a30 46%, #0c2140 100%); }
+.page-hero:before {
+  background:
+    radial-gradient(circle at 72% 38%, rgba(26, 145, 255, 0.22), transparent 32%),
+    radial-gradient(circle at 88% 12%, rgba(138, 92, 255, 0.14), transparent 34%),
+    linear-gradient(120deg, transparent 52%, rgba(109, 59, 255, 0.07));
+}
+.hero-copy h1 { font-size: 42px; letter-spacing: -1.4px; text-shadow: 0 4px 34px rgba(20, 120, 255, 0.3); }
+.hero-eyebrow { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border: 1px solid rgba(70, 150, 230, 0.35); border-radius: 999px; background: rgba(14, 34, 58, 0.6); color: #7fd4ff; }
+.hero-float-cards { position: absolute; right: 26%; top: 22px; display: flex; flex-direction: column; gap: 10px; z-index: 3; }
+.hero-float-card {
+  display: flex; align-items: center; gap: 9px;
+  border: 1px solid rgba(90, 160, 235, 0.32); border-radius: 12px;
+  background: linear-gradient(120deg, rgba(16, 38, 66, 0.85), rgba(10, 24, 44, 0.75));
+  backdrop-filter: blur(8px);
+  padding: 9px 14px; box-shadow: 0 10px 30px rgba(2, 10, 24, 0.5);
+  animation: heroFloat 6s ease-in-out infinite;
+}
+.hero-float-card:nth-child(2) { animation-delay: -2s; }
+.hero-float-card:nth-child(3) { animation-delay: -4s; }
+.hero-float-card .hfc-icon { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 32% 30%, rgba(70, 190, 255, 0.5), rgba(30, 80, 190, 0.25)); color: #7fdcff; box-shadow: 0 0 14px rgba(47, 170, 255, 0.4); }
+.hero-float-card .hfc-icon.purple { background: radial-gradient(circle at 32% 30%, rgba(160, 110, 255, 0.5), rgba(80, 40, 190, 0.25)); color: #c5a8ff; box-shadow: 0 0 14px rgba(138, 92, 255, 0.4); }
+.hero-float-card strong { display: block; font-size: 12.5px; color: #eaf4ff; }
+.hero-float-card small { display: block; color: #86a3bd; font-size: 10.5px; }
+.hero-side-slogan { position: absolute; right: 30px; top: 50%; transform: translateY(-50%); z-index: 3; text-align: left; }
+.hero-side-slogan strong { display: block; font-size: 16px; letter-spacing: 1px; color: #d7ecff; line-height: 1.6; }
+.hero-side-slogan small { display: block; margin-top: 10px; color: #6f93b3; font-size: 11px; line-height: 2; }
+.hero-side-slogan small b { display: block; color: #9fc6e8; font-weight: 600; }
+@keyframes heroFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+
+/* ---------- 时间轴（实时动态 / 机会流） ---------- */
+.timeline { position: relative; display: flex; flex-direction: column; gap: 0; max-height: 300px; overflow-y: auto; padding-left: 4px; }
+.timeline-row { position: relative; display: flex; gap: 12px; padding: 9px 0 9px 18px; }
+.timeline-row::before { content: ""; position: absolute; left: 4px; top: 0; bottom: 0; width: 1px; background: rgba(47, 190, 255, 0.16); }
+.timeline-row:first-child::before { top: 14px; }
+.timeline-row:last-child::before { bottom: auto; height: 14px; }
+.timeline-dot { position: absolute; left: 0; top: 15px; width: 9px; height: 9px; border-radius: 50%; background: #2fd8ff; box-shadow: 0 0 10px rgba(47, 216, 255, 0.8); }
+.timeline-time { flex: 0 0 52px; color: #5f7b95; font-size: 11px; padding-top: 2px; font-variant-numeric: tabular-nums; }
+.timeline-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.timeline-body strong { font-size: 12.5px; color: #cfe3f5; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timeline-body small { color: #5f7b95; font-size: 10.5px; }
+.timeline-side { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.timeline-score { font-weight: 900; font-size: 16px; color: #4fdcff; text-shadow: 0 0 14px rgba(47, 200, 255, 0.5); }
+
+/* ---------- 排行卡（TOP 名次） ---------- */
+.rank-card { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border: 1px solid var(--line-glow); border-radius: 13px; background: linear-gradient(140deg, rgba(13, 28, 48, 0.9), rgba(8, 18, 32, 0.9)); transition: 0.15s; width: 100%; text-align: left; color: var(--text); cursor: pointer; }
+.rank-card:hover { border-color: rgba(70, 160, 250, 0.45); transform: translateX(2px); }
+.rank-badge { flex: 0 0 30px; width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font-weight: 900; font-size: 14px; color: #071422; }
+.rank-1 { background: linear-gradient(135deg, #ffd76b, #ff9d3a); box-shadow: 0 0 16px rgba(255, 176, 58, 0.45); }
+.rank-2 { background: linear-gradient(135deg, #d8ecff, #8fb8dd); }
+.rank-3 { background: linear-gradient(135deg, #ffc49a, #e08a55); }
+.rank-n { background: rgba(60, 110, 170, 0.25); color: #9fc4e8; }
+.rank-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 5px; }
+.rank-main strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-bar { height: 5px; border-radius: 4px; background: rgba(40, 80, 130, 0.35); overflow: hidden; }
+.rank-bar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #29d3ff, #7b5cff); box-shadow: 0 0 10px rgba(60, 180, 255, 0.5); }
+.rank-bar i.green { background: linear-gradient(90deg, #2ee6a8, #29d3ff); }
+.rank-side { flex: 0 0 auto; text-align: right; }
+.rank-side strong { font-size: 18px; font-weight: 900; color: #4fdcff; }
+
+/* ---------- 漏斗（验证闭环） ---------- */
+.funnel { display: flex; flex-direction: column; gap: 8px; }
+.funnel-row { position: relative; display: flex; align-items: center; justify-content: space-between; height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line-glow); background: linear-gradient(90deg, rgba(24, 60, 110, 0.55), rgba(12, 28, 52, 0.65)); overflow: hidden; }
+.funnel-row::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: var(--w, 8%); background: linear-gradient(90deg, rgba(41, 211, 255, 0.5), rgba(123, 92, 255, 0.35)); border-radius: 10px 0 0 10px; }
+.funnel-row span { color: #a9c2d8; font-size: 12.5px; position: relative; }
+.funnel-row strong { position: relative; font-size: 17px; color: #fff; }
+.funnel-row small { position: relative; color: #5f7b95; font-size: 10.5px; margin-left: 7px; }
+
+/* ---------- 企业库增强 ---------- */
+.pulse-bar { width: 74px; height: 5px; border-radius: 4px; background: rgba(40, 80, 130, 0.35); overflow: hidden; margin-top: 5px; }
+.pulse-bar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #29d3ff, #2f7fff); box-shadow: 0 0 10px rgba(47, 170, 255, 0.5); }
+.company-row:hover .cell-main strong { color: #9fd8ff; }
+.opp-grade-badge { display: inline-grid; place-items: center; min-width: 34px; height: 24px; padding: 0 8px; border-radius: 8px; font-weight: 900; font-size: 12px; }
+.opp-grade-badge.g-s, .opp-grade-badge.g-a { color: #ffd88a; background: rgba(255, 176, 58, 0.14); border: 1px solid rgba(255, 176, 58, 0.5); }
+.opp-grade-badge.g-b { color: #7fc0ff; background: rgba(47, 127, 255, 0.12); border: 1px solid rgba(47, 127, 255, 0.45); }
+.opp-grade-badge.g-c { color: #9fb6cb; background: rgba(100, 130, 160, 0.12); border: 1px solid rgba(120, 150, 180, 0.4); }
+.opp-grade-badge.g-d { color: #c9a1a8; background: rgba(140, 90, 100, 0.12); border: 1px solid rgba(150, 100, 110, 0.4); }
+.status-dot { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: #7fc9a8; }
+.status-dot::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #2ee6a8; box-shadow: 0 0 8px rgba(46, 230, 168, 0.8); }
+
+/* ---------- Kanban 列头按阶段配色 ---------- */
+.kanban-col { border-radius: 14px; }
+.kanban-head strong { display: flex; align-items: center; gap: 7px; }
+.kanban-head strong::before { content: ""; width: 8px; height: 8px; border-radius: 3px; background: var(--kc, #2fd8ff); box-shadow: 0 0 10px var(--kc, #2fd8ff); }
+.kanban-head { border-bottom-color: color-mix(in srgb, var(--kc, #2fd8ff) 28%, transparent); }
+.kanban-col[data-stage="NEW"] { --kc: #29d3ff; }
+.kanban-col[data-stage="REVIEW"] { --kc: #8a5cff; }
+.kanban-col[data-stage="READY"] { --kc: #2f7fff; }
+.kanban-col[data-stage="CONTACTED"] { --kc: #35c4e8; }
+.kanban-col[data-stage="REPLIED"] { --kc: #2ee6a8; }
+.kanban-col[data-stage="MEETING"] { --kc: #a06bff; }
+.kanban-col[data-stage="QUOTED"] { --kc: #ffb03a; }
+.kanban-col[data-stage="PILOT"] { --kc: #3fe0d0; }
+.kanban-col[data-stage="WON"] { --kc: #ffd76b; }
+.kanban-col[data-stage="REJECTED"] { --kc: #ff5e74; }
+
+/* ---------- 信号卡增强 ---------- */
+.signal-item { border-radius: 13px; }
+.signal-item .heat { color: #ffb03a; font-weight: 800; font-size: 13px; text-shadow: 0 0 12px rgba(255, 176, 58, 0.4); }
+.signal-item.selected { border-color: rgba(47, 190, 255, 0.65); background: linear-gradient(140deg, rgba(16, 40, 70, 0.92), rgba(9, 22, 40, 0.92)); box-shadow: 0 0 24px rgba(31, 150, 255, 0.18); }
+
+/* ---------- 数据源/日志行 ---------- */
+.row-lead { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; flex: 0 0 auto; background: radial-gradient(circle at 32% 28%, rgba(70, 170, 255, 0.3), rgba(20, 60, 130, 0.2)); border: 1px solid rgba(80, 160, 255, 0.3); color: #6fc4ff; }
+
+/* ---------- 空状态更轻 ---------- */
+.empty-state { border-color: rgba(74, 132, 205, 0.18); background: rgba(6, 15, 27, 0.3); }
+
+/* ---------- 滚动条 ---------- */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: rgba(60, 120, 190, 0.35); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(80, 150, 230, 0.5); }
+::-webkit-scrollbar-track { background: transparent; }
+
+@media (max-width: 1350px) {
+  .hero-float-cards { display: none; }
+  .hero-side-slogan { display: none; }
+}
+
+/* ---------- 侧栏标语卡箭头 ---------- */
+.slogan-row { display: flex; align-items: center; justify-content: space-between; }
+.slogan-arrow { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; border: 1px solid rgba(90, 160, 235, 0.4); background: rgba(20, 50, 90, 0.5); color: #7fd4ff; }
+
+/* =====================================================================
+   V2.1 字体 / 背景图 / Hero 地球（严格对齐设计稿）
+   ===================================================================== */
+
+/* ---------- 字体：标题加重，数字用 DIN 风格（Windows 自带 Bahnschrift） ---------- */
+:root {
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-num: Bahnschrift, "DIN Alternate", "Segoe UI", Inter, sans-serif;
+}
+body { letter-spacing: 0.1px; }
+.hero-copy h1 { font-weight: 800; }
+.stat-copy strong, .timeline-score, .score-ring-copy strong, .rank-side strong,
+.funnel-row strong, .kanban-head span, .gauge-ring span, .conf-chip {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.stat-copy strong { font-size: 34px; font-weight: 700; letter-spacing: 0.5px; }
+.stat-copy small { font-size: 10.5px; line-height: 1.4; max-width: 150px; }
+.brand-title { font-family: var(--font-num); }
+
+/* ---------- 页面级星空底纹 ---------- */
+.app-shell::before {
+  content: "";
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image:
+    radial-gradient(1.2px 1.2px at 12% 22%, rgba(255,255,255,.5) 50%, transparent 51%),
+    radial-gradient(1px 1px at 32% 68%, rgba(255,255,255,.35) 50%, transparent 51%),
+    radial-gradient(1.4px 1.4px at 55% 12%, rgba(180,220,255,.45) 50%, transparent 51%),
+    radial-gradient(1px 1px at 71% 42%, rgba(255,255,255,.3) 50%, transparent 51%),
+    radial-gradient(1.6px 1.6px at 86% 78%, rgba(160,200,255,.4) 50%, transparent 51%),
+    radial-gradient(1px 1px at 92% 18%, rgba(255,255,255,.35) 50%, transparent 51%),
+    radial-gradient(1.2px 1.2px at 8% 82%, rgba(255,255,255,.3) 50%, transparent 51%);
+  opacity: .5;
+}
+.sidebar { z-index: 20; }
+.main-shell { position: relative; z-index: 1; }
+
+/* ---------- Hero：更高、eyebrow 回归纯文本 ---------- */
+.page-hero { min-height: 264px; padding: 30px 32px; }
+.hero-eyebrow { padding: 0; border: 0; background: none; color: #8fb5d6; font-size: 13.5px; }
+.hero-copy { width: 62%; }
+.hero-copy h1 { font-size: 42px; margin: 8px 0 12px; white-space: nowrap; }
+.hero-copy p { font-size: 15.5px; color: #a3bcd4; }
+.hero-float-cards { right: 24%; }
+
+/* ---------- 地球合成背景（照片感） ---------- */
+.hero-globe { width: 660px; height: 122%; right: 0; top: -10%; filter: drop-shadow(0 0 60px rgba(20, 110, 240, 0.2)); }
+.globe-stars {
+  position: absolute; inset: 0;
+  background-image:
+    radial-gradient(1.5px 1.5px at 18% 26%, rgba(255,255,255,.8) 50%, transparent 51%),
+    radial-gradient(1px 1px at 34% 58%, rgba(255,255,255,.5) 50%, transparent 51%),
+    radial-gradient(2px 2px at 52% 18%, rgba(190,225,255,.9) 50%, transparent 51%),
+    radial-gradient(1px 1px at 66% 72%, rgba(255,255,255,.45) 50%, transparent 51%),
+    radial-gradient(1.8px 1.8px at 82% 34%, rgba(170,210,255,.75) 50%, transparent 51%),
+    radial-gradient(1px 1px at 94% 62%, rgba(255,255,255,.5) 50%, transparent 51%),
+    radial-gradient(1.3px 1.3px at 44% 88%, rgba(255,255,255,.4) 50%, transparent 51%),
+    radial-gradient(1px 1px at 8% 70%, rgba(255,255,255,.45) 50%, transparent 51%),
+    radial-gradient(1.6px 1.6px at 26% 8%, rgba(200,235,255,.6) 50%, transparent 51%);
+  animation: twinkle 5s ease-in-out infinite;
+}
+.globe-stars.stars-2 { transform: scale(-1, 1); animation-delay: -2.5s; opacity: .6; }
+@keyframes twinkle { 0%, 100% { opacity: .9; } 50% { opacity: .45; } }
+
+.globe-sphere {
+  position: absolute; width: 380px; height: 380px; border-radius: 50%;
+  left: 150px; top: 46px;
+  background:
+    radial-gradient(circle at 33% 28%, rgba(120, 200, 255, 0.55) 0%, rgba(46, 111, 208, 0.55) 18%, rgba(18, 58, 126, 0.6) 38%, rgba(8, 28, 68, 0.7) 58%, rgba(3, 11, 30, 0.85) 78%);
+  box-shadow:
+    inset -46px -36px 100px rgba(0, 0, 0, 0.9),
+    inset 16px 12px 70px rgba(100, 175, 255, 0.28),
+    0 0 110px rgba(28, 120, 255, 0.4);
+  overflow: hidden;
+}
+.globe-grid {
+  position: absolute; inset: -12%;
+  background:
+    repeating-linear-gradient(0deg, rgba(110, 190, 255, 0.1) 0 1px, transparent 1px 26px),
+    repeating-linear-gradient(90deg, rgba(110, 190, 255, 0.1) 0 1px, transparent 1px 26px);
+  border-radius: 50%;
+  animation: globeSpin 70s linear infinite;
+}
+@keyframes globeSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.globe-continents {
+  position: absolute; inset: 0; border-radius: 50%; opacity: .5;
+  background:
+    radial-gradient(14% 10% at 30% 32%, rgba(70, 220, 180, 0.4), transparent 70%),
+    radial-gradient(18% 12% at 52% 48%, rgba(60, 200, 160, 0.32), transparent 70%),
+    radial-gradient(12% 9% at 66% 30%, rgba(70, 210, 190, 0.3), transparent 70%),
+    radial-gradient(16% 11% at 42% 70%, rgba(55, 190, 170, 0.28), transparent 70%),
+    radial-gradient(10% 8% at 72% 62%, rgba(70, 220, 180, 0.26), transparent 70%);
+  filter: blur(3px);
+}
+.globe-shine {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.28) 0%, transparent 34%);
+}
+.globe-atmosphere {
+  position: absolute; width: 408px; height: 408px; border-radius: 50%;
+  left: 136px; top: 32px;
+  border: 1.5px solid rgba(120, 200, 255, 0.35);
+  box-shadow: 0 0 46px rgba(60, 160, 255, 0.4), inset 0 0 46px rgba(60, 160, 255, 0.16);
+  pointer-events: none;
+}
+.globe-links { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .8; }
+.globe-pin {
+  position: absolute; display: grid; place-items: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: radial-gradient(circle at 32% 30%, rgba(110, 220, 255, 0.9), rgba(30, 110, 220, 0.7));
+  color: #eaf9ff; box-shadow: 0 0 16px rgba(60, 200, 255, 0.8);
+  animation: heroFloat 5s ease-in-out infinite;
+}
+.globe-pin.pin-a { left: 188px; top: 92px; }
+.globe-pin.pin-b { left: 376px; top: 224px; animation-delay: -2.5s; background: radial-gradient(circle at 32% 30%, rgba(190, 140, 255, 0.9), rgba(90, 50, 210, 0.7)); box-shadow: 0 0 16px rgba(150, 100, 255, 0.8); }
+
+/* 旧 orbit/dot 结构重定义（新 DOM 带 <i> 光点） */
+.hero-globe .orbit { position: absolute; border: 1px solid rgba(76, 163, 255, 0.28); border-radius: 50%; left: 50%; top: 52%; transform: translate(-50%, -50%) rotate(-10deg); }
+.hero-globe .orbit-a { width: 560px; height: 200px; }
+.hero-globe .orbit-b { width: 480px; height: 150px; transform: translate(-50%, -50%) rotate(14deg); }
+.hero-globe .orbit-c { width: 380px; height: 330px; transform: translate(-50%, -50%) rotate(-24deg); }
+.hero-globe .orbit i { position: absolute; width: 7px; height: 7px; border-radius: 50%; background: #4fdcff; box-shadow: 0 0 12px #4fdcff; }
+.hero-globe .orbit-a i:nth-child(1) { left: 12%; top: 40%; }
+.hero-globe .orbit-a i:nth-child(2) { right: 10%; bottom: 22%; background: #a37aff; box-shadow: 0 0 12px #a37aff; }
+.hero-globe .orbit-b i:nth-child(1) { left: 22%; bottom: 18%; }
+.hero-globe .orbit-b i:nth-child(2) { right: 16%; top: 30%; background: #ffb03a; box-shadow: 0 0 12px #ffb03a; }
+.hero-globe .orbit-c i { left: 40%; top: 6%; background: #2ee6a8; box-shadow: 0 0 12px #2ee6a8; }
+.hero-globe .signal-dot { display: none; }
+
+/* ---------- 卡片顶部高光 + 更深底 ---------- */
+.section-card, .stat-card {
+  box-shadow: 0 12px 36px rgba(2, 8, 18, 0.5), inset 0 1px 0 rgba(160, 210, 255, 0.07);
+}
+.stat-card { background: linear-gradient(155deg, rgba(14, 28, 50, 0.95), rgba(8, 17, 30, 0.95)); }
+
+/* ---------- 顶栏更通透（地球延伸感） ---------- */
+.topbar { background: rgba(4, 9, 17, 0.6); }
+
+/* ---------- 企业库行首字 logo 块 ---------- */
+.cell-lead { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; font-weight: 800; font-size: 16px; color: #7fd4ff; background: radial-gradient(circle at 32% 28%, rgba(60, 160, 255, 0.35), rgba(18, 52, 110, 0.3)); border: 1px solid rgba(80, 160, 255, 0.35); flex: 0 0 auto; font-family: var(--font-num); }
+.company-cols .cell-main { flex-direction: row; align-items: center; gap: 10px; }
+.company-cols .cell-main > span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+
+/* ---------- Kanban 数量徽章按阶段配色 ---------- */
+.kanban-head span { background: color-mix(in srgb, var(--kc, #2fd8ff) 22%, #0a1c30); border: 1px solid color-mix(in srgb, var(--kc, #2fd8ff) 45%, transparent); color: color-mix(in srgb, var(--kc, #2fd8ff) 80%, #ffffff); }
+

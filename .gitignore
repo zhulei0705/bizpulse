@@ -1,0 +1,32 @@
+# ---- 商脉 BizPulse 根 .gitignore ----
+
+# 环境与密钥
+.env
+.env.*
+*.local
+
+# Python / 后端
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 前端
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# 本地数据（真实采集库与原始页面不入库）
+backend/data/*.db
+backend/data/*.db-shm
+backend/data/*.db-wal
+backend/data/raw/
+backend/logs/
+
+# IDE / 系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,70 @@
+/* =====================================================================
+   BizPulse Design Tokens —— 全站统一设计变量（UI01 建立）
+   之后九个页面复用：不要在组件内硬编码这些值。
+   ===================================================================== */
+:root {
+  /* ---- 背景 ---- */
+  --bg-page: #04070d;               /* 页面最深层 */
+  --bg-page-2: #071120;             /* 渐变过渡层 */
+  --panel: rgba(13, 26, 46, 0.72);  /* 主面板（玻璃） */
+  --panel-2: rgba(8, 17, 30, 0.85); /* 二级面板 / 更深 */
+  --panel-solid: #0a1626;           /* 不透明面板（tooltip/弹层） */
+  --panel-hover: rgba(18, 36, 62, 0.78);
+
+  /* ---- 边框 ---- */
+  --border-line: rgba(74, 132, 205, 0.22);
+  --border-strong: rgba(90, 160, 235, 0.4);
+  --border-faint: rgba(60, 110, 175, 0.14);
+
+  /* ---- 文字 ---- */
+  --text-1: #eaf4ff;   /* 主文字 */
+  --text-2: #9db1c5;   /* 次级文字 */
+  --text-3: #5f7b95;   /* 弱化文字 / 说明 */
+  --text-brand: #6fc4ff;
+
+  /* ---- 强调色 ---- */
+  --accent-blue: #3aa0ff;
+  --accent-cyan: #29d3ff;
+  --accent-purple: #8a5cff;
+  --accent-gold: #ffb03a;
+  --accent-green: #2ee6a8;
+  --danger: #ff5e74;
+
+  /* ---- 品牌渐变（标题高亮 / 主按钮 / 激活导航） ---- */
+  --grad-brand: linear-gradient(92deg, #22c8ff 0%, #7b5cff 100%);
+  --grad-btn: linear-gradient(92deg, #06bfff 0%, #7b55ff 100%);
+
+  /* ---- 圆角 ---- */
+  --radius-xl: 20px;
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 9px;
+  --radius-pill: 999px;
+
+  /* ---- 阴影 / 发光 ---- */
+  --shadow-panel: 0 12px 36px rgba(2, 8, 18, 0.5);
+  --glow-sm: 0 0 12px rgba(47, 170, 255, 0.28);
+  --glow-md: 0 0 22px rgba(41, 160, 255, 0.32);
+  --glow-lg: 0 0 40px rgba(28, 130, 255, 0.4);
+  --inset-hi: inset 0 1px 0 rgba(160, 210, 255, 0.07);
+
+  /* ---- 间距 ---- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 22px;
+  --sp-6: 30px;
+
+  /* ---- 字体 ---- */
+  --font-ui: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-num: Bahnschrift, "DIN Alternate", "Segoe UI", Inter, sans-serif;
+
+  --fs-xs: 10.5px;
+  --fs-sm: 12px;
+  --fs-base: 13.5px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-num: 34px;
+  --fs-hero: 42px;
+}

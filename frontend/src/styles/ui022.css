@@ -1,0 +1,165 @@
+/* =====================================================================
+   UI02.2 机会雷达高还原度重构（覆盖 ui02.css 布局；继承冻结视觉体系）
+   骨架：紧凑Hero(含指标) → 常显筛选条 → 核心三栏 → 底部三栏（1~1.2屏）
+   ===================================================================== */
+
+/* ---------- 紧凑 Hero（170~210px） ---------- */
+.radar-hero {
+  position: relative;
+  min-height: 198px;
+  border: 1px solid rgba(64, 122, 195, 0.28);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(100deg, #081426 0%, #0a1a30 46%, #0c2140 100%);
+  overflow: hidden;
+  padding: 24px 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.radar-hero::before {
+  content: "";
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(circle at 78% 30%, rgba(26, 145, 255, 0.18), transparent 34%),
+    radial-gradient(circle at 90% 84%, rgba(110, 70, 255, 0.1), transparent 32%);
+}
+.radar-hero-copy { position: relative; z-index: 2; max-width: 780px; }
+.radar-hero-copy h1 { font-size: 34px; font-weight: 800; letter-spacing: -1px; margin: 6px 0 8px; }
+.radar-hero-copy h1 span { background: linear-gradient(90deg, #22c7ff, #9c62ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.radar-hero-copy > p { margin: 0 0 10px; color: #a3bcd4; font-size: 13.5px; }
+.radar-hero-actions { position: relative; z-index: 2; display: flex; flex-direction: column; gap: 9px; }
+.primary-btn.slim-h { height: 36px; padding: 0 15px; font-size: 13px; }
+.radar-hero-globe {
+  position: absolute; right: 60px; top: 50%; transform: translateY(-50%);
+  color: rgba(90, 170, 250, 0.13); pointer-events: none; z-index: 1;
+  filter: drop-shadow(0 0 30px rgba(30, 130, 255, 0.2));
+}
+
+/* 紧凑指标（Hero 内嵌横排） */
+.cm-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.cm-metric {
+  display: flex; align-items: center; gap: 8px;
+  border: 1px solid rgba(90, 160, 235, 0.28); border-radius: 11px;
+  background: linear-gradient(120deg, rgba(15, 36, 62, 0.85), rgba(10, 24, 44, 0.7));
+  backdrop-filter: blur(6px);
+  padding: 8px 13px; min-width: 148px;
+}
+.cm-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--cm, #29d3ff); box-shadow: 0 0 9px var(--cm, #29d3ff); }
+.cm-metric.tone-cyan { --cm: #29d3ff; }
+.cm-metric.tone-purple { --cm: #8a5cff; }
+.cm-metric.tone-gold { --cm: #ffb03a; }
+.cm-metric.tone-blue { --cm: #3aa0ff; }
+.cm-label { color: #8ba3b8; font-size: 11.5px; }
+.cm-value { margin-left: auto; font-family: var(--font-num); font-size: 21px; font-weight: 700; color: #eaf4ff; }
+
+/* ---------- 核心三栏（覆盖 ui02 布局） ---------- */
+.radar-main-grid { display: grid; grid-template-columns: 1.28fr 1fr 1.06fr; gap: 14px; }
+
+/* ---------- 全球机会雷达 V2 ---------- */
+.gor2-wrap { display: grid; grid-template-columns: 1fr 168px; gap: 13px; }
+.gor2-stage { position: relative; display: grid; place-items: center; }
+.gor2-svg { width: 100%; max-width: 380px; }
+.gor2-core-pulse { transform-origin: 179px 133px; animation: corePulse 3.6s ease-out infinite; }
+.gor2-node circle:first-child { animation: nodeBreath 3.2s ease-in-out infinite; }
+.gor2-node.weak circle:first-child { animation-duration: 6s; }
+.gor2-halo { animation: nodeHalo 3.6s ease-in-out infinite; }
+.gor2-sweep {
+  position: absolute; width: 252px; height: 252px; border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(41, 211, 255, 0.2), transparent 66deg, transparent);
+  animation: gorSweep 46s linear infinite; pointer-events: none;
+  mask-image: radial-gradient(circle, transparent 11%, #000 12%, #000 96%, transparent 97%);
+  -webkit-mask-image: radial-gradient(circle, transparent 11%, #000 12%, #000 96%, transparent 97%);
+}
+.gor2-empty { position: absolute; inset: auto 12px 2px 12px; text-align: center; display: flex; flex-direction: column; gap: 3px; }
+.gor2-empty strong { color: #a9bfd2; font-size: 12.5px; }
+.gor2-empty span { color: #5f7b95; font-size: 10px; line-height: 1.5; }
+.gor2-side { display: flex; flex-direction: column; gap: 7px; border-left: 1px solid rgba(48, 99, 148, 0.2); padding-left: 13px; min-width: 0; }
+.gor2-side-head { color: #7f99b0; font-size: 11.5px; letter-spacing: 0.4px; }
+.gor2-side-row {
+  display: flex; align-items: center; gap: 8px; text-align: left;
+  border: 1px solid var(--border-faint); border-radius: 10px; padding: 8px 10px;
+  background: linear-gradient(140deg, rgba(13, 29, 50, 0.75), rgba(8, 19, 33, 0.8));
+  color: var(--text); cursor: pointer; transition: 0.15s;
+}
+.gor2-side-row:hover { border-color: rgba(70, 160, 250, 0.5); }
+.gor2-side-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.gor2-side-main strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gor2-side-main small { color: #5f7b95; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gor2-score { font-family: var(--font-num); font-weight: 800; font-size: 16px; color: #4fdcff; }
+
+/* ---------- 实时机会流 V2 ---------- */
+.los-stream { display: flex; flex-direction: column; gap: 8px; max-height: 424px; overflow-y: auto; padding-right: 3px; }
+.los-row {
+  display: flex; gap: 11px; text-align: left;
+  border: 1px solid var(--border-faint); border-radius: 12px; padding: 10px 12px;
+  background: linear-gradient(140deg, rgba(13, 29, 50, 0.8), rgba(8, 19, 33, 0.85));
+  color: var(--text); cursor: pointer; transition: 0.15s;
+  animation: losIn 0.4s ease both;
+}
+@keyframes losIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.los-row:hover { border-color: rgba(70, 160, 250, 0.5); }
+.los-row.latest { border-color: rgba(41, 211, 255, 0.4); box-shadow: 0 0 16px rgba(41, 160, 255, 0.1); }
+.los-lead {
+  width: 36px; height: 36px; border-radius: 11px; flex: 0 0 auto;
+  display: grid; place-items: center; font-weight: 800; font-size: 15px; color: #7fd4ff;
+  background: radial-gradient(circle at 32% 28%, rgba(60, 160, 255, 0.35), rgba(18, 52, 110, 0.3));
+  border: 1px solid rgba(80, 160, 255, 0.35);
+}
+.los-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 5px; }
+.los-head { display: flex; align-items: baseline; gap: 8px; }
+.los-company { font-size: 13px; color: #9fd8ff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.los-time { margin-left: auto; color: #5f7b95; font-size: 10.5px; font-family: var(--font-num); flex: 0 0 auto; }
+.los-title { font-size: 12.5px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.los-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+/* ---------- 高优先级机会（Ranked Cards） ---------- */
+.por-list { display: flex; flex-direction: column; gap: 9px; max-height: 424px; overflow-y: auto; padding-right: 3px; }
+.por-card {
+  display: flex; align-items: center; gap: 10px; text-align: left;
+  border: 1px solid var(--border-faint); border-radius: 13px; padding: 11px 13px;
+  background: linear-gradient(140deg, rgba(13, 29, 50, 0.8), rgba(8, 19, 33, 0.85));
+  color: var(--text); cursor: pointer; transition: 0.16s;
+}
+.por-card:hover { border-color: rgba(255, 186, 80, 0.45); transform: translateX(2px); }
+.por-card.top {
+  border-color: rgba(255, 176, 58, 0.4);
+  background: radial-gradient(circle at 92% 24%, rgba(255, 176, 58, 0.08), transparent 44%), linear-gradient(140deg, rgba(13, 29, 50, 0.85), rgba(8, 19, 33, 0.88));
+}
+.por-lead {
+  width: 36px; height: 36px; border-radius: 11px; flex: 0 0 auto;
+  display: grid; place-items: center; font-weight: 800; font-size: 15px; color: #ffc76b;
+  background: radial-gradient(circle at 32% 28%, rgba(255, 170, 60, 0.3), rgba(120, 70, 20, 0.25));
+  border: 1px solid rgba(255, 180, 80, 0.35);
+}
+.por-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 5px; }
+.por-head { display: flex; align-items: center; gap: 8px; }
+.por-title { font-size: 13px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.por-score { font-family: var(--font-num); font-weight: 800; font-size: 18px; color: #4fdcff; text-shadow: 0 0 12px rgba(47, 200, 255, 0.4); flex: 0 0 auto; }
+.por-sub { color: #6fb9e8; font-size: 11px; }
+.por-meta { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ---------- 页面整体更紧凑 ---------- */
+.radar-page .page-stack { gap: 12px; }
+.radar-page .section-body { padding: 13px 15px 14px; }
+.radar-page .section-head { min-height: 54px; padding: 14px 16px 10px; }
+.dashboard-grid.three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 1600px) {
+  .radar-main-grid { grid-template-columns: 1.22fr 1fr; }
+  .radar-main-grid .section-card:nth-child(3) { grid-column: span 2; }
+}
+@media (max-width: 1440px) {
+  .radar-hero { min-height: 190px; padding: 22px 26px; }
+  .radar-hero-copy h1 { font-size: 30px; }
+}
+@media (max-width: 1366px) {
+  .radar-main-grid { grid-template-columns: 1fr 1fr; }
+  .radar-main-grid .section-card:nth-child(1) { grid-column: span 2; }
+  .gor2-wrap { grid-template-columns: 1fr 150px; }
+  .radar-hero-globe { right: 20px; }
+  .cm-metric { min-width: 132px; padding: 7px 11px; }
+  .dashboard-grid.three { grid-template-columns: 1fr 1fr; }
+  .dashboard-grid.three .section-card:nth-child(3) { grid-column: span 2; }
+}

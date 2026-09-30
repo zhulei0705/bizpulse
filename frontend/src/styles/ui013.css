@@ -1,0 +1,76 @@
+/* =====================================================================
+   UI01.3 首页最终微调（冻结前最后一轮）
+   仅视觉校准：地球质感 / 核心字号 +5~10% / 导航加宽 / 机会卡层级
+   ===================================================================== */
+
+/* ---------- 1. Hero 右侧：半透明数字地球 + 网络连线 + Pulse 节点 ---------- */
+.hero-network .net-svg { opacity: 0.96; }
+.hero-network::before {
+  background:
+    radial-gradient(circle at 72% 44%, rgba(30, 120, 240, 0.2), transparent 44%),
+    radial-gradient(circle at 34% 78%, rgba(110, 70, 255, 0.1), transparent 40%);
+}
+.net-node circle:first-child { filter: drop-shadow(0 0 5px currentColor); }
+.net-node circle:last-child { animation: nodeHalo 3.6s ease-in-out infinite; }
+@keyframes nodeHalo { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.hero-network .net-svg ellipse { animation: orbitDrift 26s ease-in-out infinite alternate; }
+@keyframes orbitDrift { from { transform: translateX(0); } to { transform: translateX(6px); } }
+
+/* ---------- 2. 全局核心字号 +5~10% ---------- */
+:root { --fs-kpi: 48px; }
+.stat-copy span { font-size: 14.5px; }
+.stat-copy small { font-size: 12px; }
+.section-head h3 { font-size: 19px; }
+.section-head p { font-size: 13px; }
+.ss-title { font-size: 14px; }
+.watchlist-head { font-size: 12.5px; }
+.watchlist-cell { font-size: 14px; }
+.watchlist-company strong { font-size: 15px; }
+.cell-strong { font-size: 17px; }
+.system-strip span { font-size: 12px; }
+.system-strip strong { font-size: 14px; }
+.chip { font-size: 11.5px; }
+.conf-chip { font-size: 11px; }
+
+/* ---------- 3. 左侧导航加宽与精修 ---------- */
+.sidebar { width: 240px; }
+.sidebar.collapsed { width: 80px; }
+.main-shell { margin-left: 240px; width: calc(100% - 240px); }
+.sidebar.collapsed ~ .main-shell { margin-left: 80px; width: calc(100% - 80px); }
+.brand-icon { width: 50px; height: 50px; }
+.brand-icon svg { width: 31px; height: 31px; }
+.brand-title { font-size: 21px; }
+.nav-item { font-size: 15px; padding: 14px 16px; }
+.nav-item svg { width: 22px; height: 22px; }
+.nav-item.active {
+  background: linear-gradient(92deg, rgba(34, 130, 235, 0.55) 0%, rgba(104, 74, 240, 0.36) 78%, transparent 100%);
+  border-left-color: #8fe8ff;
+  box-shadow: inset 0 0 26px rgba(70, 160, 255, 0.16), 8px 0 22px -8px rgba(70, 170, 255, 0.5);
+}
+.slogan-card { padding: 20px 15px; }
+.slogan-card span { font-size: 12.5px; }
+.slogan-card strong { font-size: 15px; }
+
+/* ---------- 4. 高价值机会：视觉层级再强化 ---------- */
+.top-opp-card { padding: 22px 26px; border-radius: 20px; border-width: 2px; gap: 24px; }
+.top-opp-head strong { font-size: 18.5px; }
+.top-opp-problem { font-size: 13.5px; }
+.top-opp-card .chip { height: 28px; font-size: 12.5px; padding: 0 11px; }
+.top-opp-trigger { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border-radius: 8px; border: 1px solid rgba(255, 186, 80, 0.45); background: rgba(255, 176, 58, 0.1); color: #ffc76b; font-size: 12.5px; white-space: nowrap; }
+.top-opp-evidence { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border-radius: 8px; border: 1px solid rgba(46, 230, 168, 0.4); background: rgba(46, 230, 168, 0.08); color: #52efc0; font-size: 12.5px; white-space: nowrap; }
+.top-opp-card .fact-tag { height: 24px; font-size: 11.5px; }
+
+/* ---------- 响应式同步 ---------- */
+@media (max-width: 1440px) {
+  :root { --fs-kpi: 44px; }
+  .section-head h3 { font-size: 18px; }
+}
+@media (max-width: 1366px) {
+  .sidebar { width: 232px; }
+  .main-shell { margin-left: 232px; width: calc(100% - 232px); }
+  .sidebar.collapsed ~ .main-shell { margin-left: 80px; width: calc(100% - 80px); }
+  :root { --fs-kpi: 42px; }
+  .nav-item { font-size: 14.5px; padding: 13px 14px; }
+  .watchlist-cell { font-size: 13.5px; }
+  .top-opp-card { padding: 18px 20px; }
+}

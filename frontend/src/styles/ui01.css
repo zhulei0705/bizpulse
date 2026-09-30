@@ -1,0 +1,62 @@
+/* =====================================================================
+   UI01 首页复刻：商业脉搏核心 / 关注企业榜 / 动效
+   ===================================================================== */
+
+/* 数字更新淡入 */
+@keyframes numIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* Skeleton */
+.bp-skeleton { display: inline-block; background: linear-gradient(90deg, rgba(40, 80, 130, 0.22) 25%, rgba(60, 120, 190, 0.3) 37%, rgba(40, 80, 130, 0.22) 63%); background-size: 400% 100%; animation: bpSkeleton 1.3s ease infinite; }
+@keyframes bpSkeleton { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+
+/* ---------- 商业脉搏核心 ---------- */
+.pulse-core { display: grid; grid-template-columns: 190px 1fr; gap: 18px; align-items: center; min-height: 210px; }
+.pulse-gauge-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.pulse-gauge-ring { position: relative; width: 152px; height: 152px; display: grid; place-items: center; }
+.pulse-gauge-ring::before { content: ""; position: absolute; inset: -14px; border-radius: 50%; background: radial-gradient(circle, rgba(41, 160, 255, 0.14), transparent 66%); }
+.pulse-gauge-copy { position: absolute; text-align: center; line-height: 1.1; }
+.pulse-gauge-copy span { font-size: 40px; font-weight: 800; font-family: var(--font-num); color: #fff; text-shadow: 0 0 24px rgba(60, 190, 255, 0.5); }
+.pulse-gauge-copy small { display: block; margin-top: 4px; color: #7d97ae; font-size: 10.5px; }
+.pulse-gauge-sub { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.pulse-gauge-sub small { color: #5f7b95; font-size: 10.5px; font-family: var(--font-num); }
+.pulse-insight { display: flex; flex-direction: column; gap: 11px; border: 1px solid rgba(138, 92, 255, 0.4); border-radius: 13px; padding: 14px 15px; background: linear-gradient(140deg, rgba(70, 40, 160, 0.1), rgba(12, 26, 46, 0.4)); min-width: 0; }
+.pulse-insight-head { display: inline-flex; align-items: center; gap: 6px; color: #b79bff; font-size: 12px; font-weight: 700; }
+.pulse-insight p { margin: 0; color: #b9cde0; font-size: 12.5px; line-height: 1.65; }
+.pulse-insight-tags { display: flex; flex-wrap: wrap; gap: 7px; }
+
+/* ---------- 关注企业榜（表格式） ---------- */
+.watchlist { display: flex; flex-direction: column; gap: 2px; }
+.watchlist-head { display: grid; grid-template-columns: 1.5fr .9fr 2fr .7fr .7fr; gap: 12px; padding: 6px 10px 10px; color: #5f7b95; font-size: 11px; border-bottom: 1px solid rgba(48, 99, 148, 0.22); }
+.watchlist-row { display: grid; grid-template-columns: 1.5fr .9fr 2fr .7fr .7fr; gap: 12px; align-items: center; padding: 9px 10px; border-radius: 10px; transition: 0.15s; }
+.watchlist-row:hover { background: rgba(31, 120, 220, 0.08); }
+.watchlist-company { display: flex; align-items: center; gap: 10px; background: none; border: 0; color: var(--text); cursor: pointer; padding: 0; text-align: left; min-width: 0; }
+.watchlist-company strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.watchlist-company:hover strong { color: #9fd8ff; }
+.watchlist-cell { color: #a9bfce; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- hero 更新时间 ---------- */
+.hero-updated { margin-top: 7px; color: #587089; font-size: 11.5px; }
+.hero-actions { margin-top: 16px; }
+
+/* ---------- 响应式（1366 无横向滚动） ---------- */
+@media (max-width: 1366px) {
+  .home-grid { grid-template-columns: 1fr 1fr; }
+  .home-grid .section-card:nth-child(1) { grid-column: span 1; }
+  .pulse-core { grid-template-columns: 160px 1fr; gap: 14px; }
+  .watchlist-head, .watchlist-row { grid-template-columns: 1.4fr .9fr 1.6fr .6fr .6fr; gap: 9px; }
+  .hero-float-cards { right: 27%; transform: scale(0.92); transform-origin: top right; }
+  .hero-copy p { max-width: 540px; }
+  .hero-copy h1 { font-size: 38px; }
+}
+@media (max-width: 1200px) {
+  .pulse-core { grid-template-columns: 1fr; }
+  .watchlist-head, .watchlist-row { grid-template-columns: 1.4fr 1.6fr .6fr .6fr; }
+  .watchlist-head span:nth-child(2), .watchlist-row .watchlist-cell:nth-child(2) { display: none; }
+}
+
+/* ---------- 趋势图时间范围 tab（对齐参考图） ---------- */
+.trend-tabs { display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 4px; }
+.trend-tab { height: 26px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(74, 132, 205, 0.3); background: rgba(10, 22, 38, 0.7); color: #8aa5bd; font-size: 11px; cursor: pointer; transition: 0.15s; }
+.trend-tab:hover { color: #cfe6fa; border-color: rgba(110, 170, 240, 0.5); }
+.trend-tab.on { color: #fff; border-color: transparent; background: linear-gradient(92deg, rgba(34, 200, 255, 0.85), rgba(123, 92, 255, 0.85)); box-shadow: 0 0 14px rgba(60, 170, 255, 0.3); }
+
