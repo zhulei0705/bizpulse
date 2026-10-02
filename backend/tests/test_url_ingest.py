@@ -193,3 +193,62 @@ def test_ingest_failure_does_not_break_system(client, mock_fetch):
     assert client.get("/api/v1/health").status_code == 200
     client.post("/api/v1/ingest/url", json={"url": "http://localhost/x"})
     assert client.get("/api/v1/health").json()["data"]["status"] == "ok"
+
+
+# ---------------------------------------------------------------------------
+# 权威域名自动定级（T05 真实数据验证：ccgp.gov.cn 等政府官网应为 A 级）
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("url,expected", [
+    ("http://www.ccgp.gov.cn/zhaobiao/1.htm", True),
+    ("https://ccgp.gov.cn/x", True),
+    ("http://www.moe.gov.cn/x", True),
+    ("https://www.gsxt.gov.cn/x", True),
+    ("http://www.tsinghua.edu.cn/x", True),
+    ("https://harvard.edu/x", True),
+    ("https://www.example.com/news", False),
+    ("https://blog.example.org/gov-post", False),
+    ("https://notgov.example.com/x", False),
+])
+def test_is_authoritative_domain(url, expected):
+    from app.services.ingest import _is_authoritative_domain
+
+    assert _is_authoritative_domain(url) is expected
+
+
+def test_ingest_gov_url_upgrades_source_grade(client, mock_fetch):
+    resp = client.post("/api/v1/ingest/url", json={"url": "http://www.ccgp.gov.cn/zhaobiao/1.htm"})
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    record = client.get(f"/api/v1/source-records/{data['source_record_id']}").json()["data"]
+    assert record["source"]["reliability_grade"] == "A"
+    assert record["source"]["reliability_score"] >= 95
+
+    # 普通商业域名仍为默认 C 级（不受 gov 升级影响）
+    resp2 = client.post("/api/v1/ingest/url", json={"url": "https://www.hengfeng-test-example.com/news/1"})
+    assert resp2.status_code == 200, resp2.text
+    record2 = client.get(f"/api/v1/source-records/{resp2.json()['data']['source_record_id']}").json()["data"]
+    assert record2["source"]["reliability_grade"] == "A"  # 共享手动来源：已被 gov URL 升级，只升不降
+
+
+def test_authoritative_grade_never_downgrades_and_idempotent(client):
+    from app.db.session import SessionLocal
+    from app.models.source import Source
+    from app.services.ingest import ensure_authoritative_grade
+
+    with SessionLocal() as db:
+        source = db.query(Source).filter(Source.source_type == "MANUAL_URL").first()
+        assert source is not None
+        assert source.reliability_grade == "A"  # 前面的 gov 测试已升级
+
+        # 幂等：A 级 + score>=95 再次命中不再变更
+        assert ensure_authoritative_grade(db, source, "http://www.ccgp.gov.cn/y") is False
+        assert source.reliability_grade == "A"
+
+        # 人工下调后政府 URL 仍会拉回 A（只升不降）
+        source.reliability_grade = "C"
+        source.reliability_score = 55
+        assert ensure_authoritative_grade(db, source, "http://www.moe.gov.cn/z") is True
+        assert source.reliability_grade == "A"
+        assert source.reliability_score == 95
+        db.commit()

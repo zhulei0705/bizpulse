@@ -31,6 +31,41 @@ logger = logging.getLogger(__name__)
 MANUAL_SOURCE_NAME = "手动URL分析"
 MANUAL_SOURCE_TYPE = "MANUAL_URL"
 
+# 权威域名后缀：命中时手动来源自动升为 A 级（官方/一手来源），避免政府采购等
+# 官网信息被默认 C 级压低证据分（T05 真实数据验证发现）。
+AUTHORITATIVE_DOMAIN_SUFFIXES = (
+    ".gov.cn",
+    ".gov",
+    ".edu.cn",
+    ".edu",
+)
+
+
+def _is_authoritative_domain(url: str) -> bool:
+    host = extractor.domain_of(url)
+    if not host:
+        return False
+    return any(host == s.lstrip(".") or host.endswith(s) for s in AUTHORITATIVE_DOMAIN_SUFFIXES)
+
+
+def ensure_authoritative_grade(db: Session, source: Source, url: str) -> bool:
+    """手动 URL 命中权威域名且来源等级偏低时自动升级（只升不降，人工可再调）。"""
+    if not _is_authoritative_domain(url):
+        return False
+    if source.reliability_grade == "A" and source.reliability_score >= 95:
+        return False
+    old = (source.reliability_grade, source.reliability_score)
+    source.reliability_grade = "A"
+    source.reliability_score = max(int(source.reliability_score), 95)
+    write_audit(
+        db,
+        "UPDATE",
+        "source",
+        source.id,
+        {"reason": "authoritative_domain", "url": url, "from_grade": old[0], "to_grade": "A"},
+    )
+    return True
+
 
 @dataclass
 class IngestResult:
@@ -138,6 +173,7 @@ def ingest_url(db: Session, url: str, note: str = "") -> "IngestResult":
     from app.services.collection_engine import persist_collected
 
     manual_source = get_manual_source(db)
+    ensure_authoritative_grade(db, manual_source, url)
     adapter = ManualUrlCollector(manual_source, {"url": url})
     adapter.validate_config()
     items = adapter.build_records()
