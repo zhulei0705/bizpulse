@@ -32,3 +32,34 @@ CRM_DEMAND, ERP_DEMAND, AI_DEMAND,
 DIGITAL_TRANSFORMATION, AI_TRANSFORMATION, AUTOMATION_DEMAND,
 CUSTOMER_COMPLAINT, COST_PRESSURE, EFFICIENCY_PROBLEM, MANUAL_WORK, DATA_PROBLEM,
 PARTNERSHIP, STRATEGIC_COOPERATION, MANAGEMENT_CHANGE, POLICY_IMPACT, OTHER"""
+
+# ---------------------------------------------------------------------------
+# T05：机会判断 LLM（只做解释与假设，不做事实、不做分数）
+# ---------------------------------------------------------------------------
+
+OPPORTUNITY_GENERATOR_V1 = "opportunity_generator_v1"
+
+OPPORTUNITY_GENERATOR_SYSTEM = """你是商业机会解释引擎。输入是一个企业的真实商业信号（Signal）与原文证据（Evidence），以及代码计算好的各项分数。
+
+严格规则：
+1. 只能使用提供的 Signal 和 Evidence 生成内容，不能创造新的事实（不得编造企业、人物、金额、数量、时间、联系方式）。
+2. 事实不足时必须返回 insufficient_evidence=true，并用最少的话说明缺什么。
+3. pain_hypotheses / solution_hypotheses 是推断，必须使用"可能/或将/预示"等措辞；solution 永远是假设（SOLUTION_HYPOTHESIS），不是"客户已经需要这个产品"。
+4. value_proposition 只能表达价值方向（提高效率/降低成本/节省时间/降低风险），禁止编造 ROI 数字（如"提升30%"）。
+5. why_now 必须引用真实信号的时间与内容（例如"最近30天连续新增海外销售岗位"）。
+6. risk_notes 必须诚实列出负面因素（证据不足、无预算信号、矛盾信息等）。
+7. validation_questions 生成 2-4 个用于客户访谈的验证问题（问题可以由 AI 生成，事实不能）。
+8. 你不决定任何分数；分数由系统代码计算。
+
+输出 JSON 结构：
+{
+  "insufficient_evidence": false,
+  "missing_information": null,
+  "pain_hypotheses": [{"category": "枚举值", "description": "推断描述"}],
+  "solution_hypotheses": [{"title": "...", "description": "..."}],
+  "value_proposition": "...",
+  "why_now": "...",
+  "risk_notes": ["..."],
+  "validation_questions": ["..."],
+  "confidence": 0-100 的整数（你对以上解释把握的自信度，不是机会分数）
+}"""

@@ -150,6 +150,33 @@ class LLMAdapter:
         )
         return self._run(db, "opportunity_generation", "gen_opportunity_v1", system, f"企业：{company_name}\n痛点：\n{pains_text[:12000]}", target_type, target_id)
 
+    def generate_opportunity_v1(self, db: Session, company: str, signals_payload: str, target_type: str | None = None, target_id: str | None = None) -> dict | None:
+        """T05 机会解释生成：输入真实 Signal/Evidence + 代码分数，输出结构化解释 JSON。
+
+        返回原始 dict（含 insufficient_evidence / pain_hypotheses / why_now / risk_notes /
+        validation_questions / confidence）；失败或未配置返回 None（规则兜底，不阻塞）。
+        LLM 不决定任何分数。
+        """
+        from app.analyzers.prompts import OPPORTUNITY_GENERATOR_SYSTEM, OPPORTUNITY_GENERATOR_V1
+        user = f"企业：{company}\n\n真实信号与证据（唯一事实来源）：\n{signals_payload[:14000]}"
+        input_hash = hashlib.sha256(user.encode("utf-8")).hexdigest()
+        started = __import__("time").perf_counter()
+        run = LLMRun(module="opportunity_generation_v1", prompt_name=OPPORTUNITY_GENERATOR_V1, prompt_version=OPPORTUNITY_GENERATOR_V1, model=self.model, provider="openai-compatible", target_type=target_type, target_id=target_id, input_hash=input_hash)
+        db.add(run)
+        try:
+            data = self._chat(OPPORTUNITY_GENERATOR_SYSTEM, user)
+            run.output_json = data
+            run.status = "SUCCESS"
+        except Exception as exc:  # noqa: BLE001 —— LLM 失败不允许阻塞分析
+            run.status = "FAILED"
+            run.error_message = str(exc)[:2000]
+            db.commit()
+            logger.warning("LLM opportunity generation failed: %s", exc)
+            return None
+        run.duration_seconds = __import__("time").perf_counter() - started
+        db.commit()
+        return data if isinstance(data, dict) else None
+
 
 def get_llm_adapter() -> LLMAdapter | None:
     if not llm_configured():

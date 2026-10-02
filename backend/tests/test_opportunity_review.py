@@ -1,4 +1,4 @@
-"""人工审核测试：approve/reject/edit/ready，审核记录 + 审计日志。"""
+﻿"""人工审核测试：approve/reject/edit/ready，审核记录 + 审计日志。"""
 import uuid
 
 import pytest
@@ -94,3 +94,46 @@ def test_review_invalid_action(client, opportunity):
 def test_review_missing_opportunity(client):
     resp = client.post("/api/v1/opportunities/opp_missing/review", json={"action": "approve"})
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# T05：need_more_evidence 动作 + 驳回原因枚举
+# ---------------------------------------------------------------------------
+
+def test_review_need_more_evidence(client, opportunity):
+    data = _review(client, opportunity["id"], action="need_more_evidence", note="仅有间接信号，需要补充预算证据")
+    assert data["review_status"] == "NEED_MORE_EVIDENCE"
+    assert data["stage"] in {"NEW", "REVIEW"}
+    audit = _last_review_audit(client, opportunity["id"])
+    assert audit["payload_json"]["action"] == "need_more_evidence"
+
+
+def test_review_reject_with_enum_reason(client, opportunity):
+    data = _review(client, opportunity["id"], action="reject", reject_reason="WEAK_EVIDENCE", note="证据不足")
+    assert data["stage"] == "REJECTED"
+    assert data.get("reject_reason") == "WEAK_EVIDENCE"
+    audit = _last_review_audit(client, opportunity["id"])
+    assert audit["payload_json"]["changes"]["reject_reason"] == "WEAK_EVIDENCE"
+
+
+def test_review_reject_invalid_reason(client, opportunity):
+    resp = client.post(f"/api/v1/opportunities/{opportunity['id']}/review",
+                       json={"action": "reject", "reject_reason": "MADE_UP_REASON"})
+    assert resp.status_code == 422
+
+
+def test_detail_contains_t05_fields(client, opportunity):
+    detail = client.get(f"/api/v1/opportunities/{opportunity['id']}").json()["data"]
+    for field in ["why_now", "risk_notes", "validation_questions", "score_breakdown",
+                  "grade_cap_reason", "recommended_next_action", "fingerprint",
+                  "last_signal_at", "expires_at", "stale_reason", "reject_reason"]:
+        assert field in detail, f"详情必须包含 T05 字段 {field}"
+    assert detail["score_breakdown"], "score_breakdown 默认应为对象"
+
+
+def test_candidate_list_and_detail_api(client):
+    resp = client.get("/api/v1/opportunity-candidates")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert {"items", "total", "counts"} <= set(data)
+    assert {"review", "need_more_evidence", "approved", "converted"} <= set(data["counts"])

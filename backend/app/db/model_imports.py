@@ -6,6 +6,7 @@ from app.models.job import CollectionJob
 from app.models.llm_run import LLMRun
 from app.models.market import Market
 from app.models.opportunity import Opportunity, OpportunityEvidence
+from app.models.opportunity_candidate import OpportunityCandidate, SignalBundle
 from app.models.pain_point import PainPoint, PainPointEvidence
 from app.models.signal import Signal, SignalCandidate, SignalEvidence
 from app.models.source import Source, SourceRecord
@@ -24,7 +25,9 @@ __all__ = [
     "LLMRun",
     "Market",
     "Opportunity",
+    "OpportunityCandidate",
     "OpportunityEvidence",
+    "SignalBundle",
     "PainPoint",
     "PainPointEvidence",
     "Signal",

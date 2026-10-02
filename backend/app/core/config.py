@@ -54,6 +54,32 @@ class Settings(BaseSettings):
     # T04：Signal 自动批准门槛（confidence≥85 且来源 A/B 且证据原文可寻）
     signal_auto_approve_threshold: int = 85
 
+    # T05：Opportunity 总评分权重（Pain25/Budget20/Intent20/Urgency10/AgentFit10/Reach5/Evidence10）
+    opportunity_score_weights: dict = {
+        "pain": 0.25, "budget": 0.20, "intent": 0.20, "urgency": 0.10,
+        "agent_fit": 0.10, "reachability": 0.05, "evidence": 0.10,
+    }
+    # T05：Intent Score 组成（直接购买信号40/问题证据20/近期变化15/多信号支持15/来源质量10）
+    intent_score_weights: dict = {
+        "direct_purchase": 0.40, "problem_evidence": 0.20, "recent_change": 0.15,
+        "multi_signal": 0.15, "source_quality": 0.10,
+    }
+    # T05：Evidence Gate —— Evidence Score < 60 时 Opportunity 等级最高 B
+    evidence_gate_threshold: int = 60
+    # T05：等级阈值（S/A/B/C/D）
+    opportunity_grade_thresholds: dict = {"S": 90, "A": 80, "B": 70, "C": 60}
+    # T05：进入机会分析的最低条件（Approved Signal ≥ 1 且 Evidence ≥ 1）
+    opportunity_min_approved_signals: int = 1
+    opportunity_min_evidences: int = 1
+    # T05：机会去重窗口（天）：同 fingerprint 窗口内更新不新建
+    opportunity_dedup_window_days: int = 14
+    # T05：机会过期（天）：无新 Signal 超过该天数可进入 STALE
+    opportunity_stale_days: int = 90
+    # T05：V1 候选机会不自动批准 —— 全部进入 REVIEW（数据积累后再自动化）
+    opportunity_auto_approve: bool = False
+    # T05：Signal 时间密度窗口（天）
+    signal_density_windows: list = [7, 30, 90]
+
 
 
 

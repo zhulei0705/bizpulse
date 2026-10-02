@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, new_id
@@ -38,6 +38,25 @@ class Opportunity(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(30), default="ACTIVE", nullable=False, index=True)
     owner: Mapped[str | None] = mapped_column(String(200))
 
+    # ---- T05：机会判断引擎字段 ----
+    # 关联 OpportunityCandidate.id（有意不用 DB 级 FK：与 opportunity_candidates.opportunity_id 构成环，
+    # SQLite 无法安全双向约束；引用完整性由应用层维护，双端均有索引）
+    candidate_id: Mapped[str | None] = mapped_column(String(32), index=True)
+    why_now: Mapped[str | None] = mapped_column(Text)
+    risk_notes: Mapped[list] = mapped_column(JSON, default=list, server_default="[]", nullable=False)
+    validation_questions: Mapped[list] = mapped_column(JSON, default=list, server_default="[]", nullable=False)
+    score_breakdown_json: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}", nullable=False)
+    grade_cap_reason: Mapped[str | None] = mapped_column(String(50))
+    recommended_next_action: Mapped[str | None] = mapped_column(String(50))
+    # 去重指纹：company + pain_category + solution_category + 时间窗
+    fingerprint: Mapped[str | None] = mapped_column(String(64), index=True)
+    analysis_input_hash: Mapped[str | None] = mapped_column(String(64))
+    last_signal_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    last_evidence_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    stale_reason: Mapped[str | None] = mapped_column(String(200))
+    reject_reason: Mapped[str | None] = mapped_column(String(50))
+
     # 人工审核记录
     review_status: Mapped[str] = mapped_column(String(30), default="PENDING", nullable=False, index=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -62,5 +81,8 @@ class OpportunityEvidence(Base):
     evidence_type: Mapped[str] = mapped_column(String(50), default="SOURCE", nullable=False)
     evidence_excerpt: Mapped[str | None] = mapped_column(Text)
     weight: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # T05：证据极性（SUPPORTING / NEUTRAL / CONTRADICTING）与来源等级快照（可解释扣分）
+    polarity: Mapped[str] = mapped_column(String(20), default="SUPPORTING", server_default="SUPPORTING", nullable=False, index=True)
+    source_grade: Mapped[str | None] = mapped_column(String(1))
 
     opportunity: Mapped[Opportunity] = relationship(back_populates="evidences")

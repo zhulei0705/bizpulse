@@ -77,3 +77,103 @@ RELIABILITY_GRADES: dict[str, str] = {
     "C": "社区/论坛/公开社交平台",
     "D": "转载/无法完全确认",
 }
+
+# ---------------------------------------------------------------------------
+# T05：机会判断引擎
+# ---------------------------------------------------------------------------
+
+# 机会阶段补齐（与现有前端状态兼容）
+OPPORTUNITY_STAGES["STALE"] = "已过期"
+
+# PainPoint 分类（17 类，初期支持，可扩展）
+PAIN_CATEGORIES: dict[str, str] = {
+    "CUSTOMER_ACQUISITION": "客户获取",
+    "SALES_EFFICIENCY": "销售效率",
+    "LEAD_SHORTAGE": "线索不足",
+    "OVERSEAS_EXPANSION": "海外拓展",
+    "CUSTOMER_SERVICE": "客户服务",
+    "RECRUITMENT": "招聘",
+    "FINANCE_EFFICIENCY": "财务效率",
+    "INVOICE_AUTOMATION": "发票自动化",
+    "PROCUREMENT": "采购",
+    "SUPPLIER_MANAGEMENT": "供应商管理",
+    "DATA_MANAGEMENT": "数据管理",
+    "AI_TRANSFORMATION": "AI转型",
+    "DIGITAL_TRANSFORMATION": "数字化转型",
+    "PROCESS_AUTOMATION": "流程自动化",
+    "COMPLIANCE": "合规",
+    "COST_REDUCTION": "降本",
+    "OTHER": "其他",
+}
+
+# PainPoint 状态：CONFIRMED 只能来自人工/访谈/真实 Interaction，AI 不得自行升级
+PAIN_POINT_STATUSES: dict[str, str] = {
+    "INFERRED": "已推断",
+    "REVIEWED": "已复核",
+    "CONFIRMED": "已确认（人工）",
+    "REJECTED": "已驳回",
+}
+
+# 机会候选状态机：DETECTED → NEED_MORE_EVIDENCE / REVIEW → APPROVED / REJECTED / CONVERTED
+OPPORTUNITY_CANDIDATE_STATUSES: dict[str, str] = {
+    "DETECTED": "已识别",
+    "NEED_MORE_EVIDENCE": "证据不足",
+    "REVIEW": "待人工审核",
+    "APPROVED": "已通过",
+    "REJECTED": "已驳回",
+    "CONVERTED": "已转正式机会",
+}
+
+# 机会驳回原因（后续复盘最重要的数据）
+OPPORTUNITY_REJECT_REASONS: dict[str, str] = {
+    "NO_REAL_PROBLEM": "无真实问题",
+    "WEAK_EVIDENCE": "证据不足",
+    "WRONG_INTERPRETATION": "解读有误",
+    "LOW_VALUE": "价值过低",
+    "NO_BUDGET_SIGNAL": "无预算信号",
+    "NOT_REACHABLE": "无法触达",
+    "DUPLICATE": "重复机会",
+    "BAD_TIMING": "时机不对",
+    "OTHER": "其他",
+}
+
+# Evidence 极性：矛盾证据必须压低 Confidence / Evidence Score
+EVIDENCE_POLARITY: dict[str, str] = {
+    "SUPPORTING": "支持",
+    "NEUTRAL": "中性",
+    "CONTRADICTING": "矛盾",
+}
+
+# 推荐下一步动作（只能建议，不得自动外发）
+NEXT_ACTIONS: dict[str, str] = {
+    "RESEARCH": "继续研究",
+    "FIND_CONTACT": "查找公开联系人",
+    "MANUAL_REVIEW": "人工审核",
+    "CUSTOMER_INTERVIEW": "客户访谈",
+    "SEND_PROPOSAL": "发送方案",
+    "EXPERIMENT": "进入实验",
+}
+
+# 直接购买信号类型（Intent 的强信号）
+DIRECT_PURCHASE_SIGNAL_TYPES = {
+    "PROCUREMENT", "TENDER", "SUPPLIER_SEARCH", "CRM_DEMAND", "ERP_DEMAND",
+    "AI_DEMAND", "AUTOMATION_DEMAND",
+}
+
+# 信号组合类型
+SIGNAL_BUNDLE_TYPES: dict[str, str] = {
+    "OVERSEAS_GROWTH": "海外扩张组合",
+    "AI_ADOPTION": "AI 采用组合",
+    "PURCHASE_READY": "采购就绪组合",
+    "SALES_SCALE_UP": "销售扩张组合",
+    "SERVICE_STRAIN": "客服压力组合",
+    "COST_OPTIMIZATION": "降本增效组合",
+    "FINANCE_AUTOMATION": "财务自动化组合",
+}
+
+# 假设类型标记（Solution 永远是假设，不是既成需求）
+HYPOTHESIS_KINDS: dict[str, str] = {
+    "SOLUTION_HYPOTHESIS": "解决方案假设",
+    "VALUE_HYPOTHESIS": "价值假设",
+    "PAIN_INFERENCE": "痛点推断",
+}

@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import Field, model_validator
 
+from app.core.constants import OPPORTUNITY_REJECT_REASONS
 from app.schemas.common import ORMModel
 
 
@@ -53,10 +54,24 @@ class OpportunityRead(ORMModel):
     evidence_score: int
     total_score: float
     grade: str
+    grade_cap_reason: str | None = None
     confidence: int
     stage: str
     status: str
     owner: str | None
+    # T05 新增（详情可解释性）
+    why_now: str | None = None
+    risk_notes: list = []
+    validation_questions: list = []
+    score_breakdown: dict = {}
+    recommended_next_action: str | None = None
+    fingerprint: str | None = None
+    last_signal_at: datetime | None = None
+    last_evidence_at: datetime | None = None
+    expires_at: datetime | None = None
+    stale_reason: str | None = None
+    reject_reason: str | None = None
+    candidate_id: str | None = None
     review_status: str = "PENDING"
     reviewed_at: datetime | None = None
     review_note: str | None = None
@@ -98,12 +113,16 @@ class OpportunityReviewUpdates(ORMModel):
 
 
 class OpportunityReviewRequest(ORMModel):
-    action: str  # approve | reject | edit | ready
+    action: str  # approve | reject | edit | ready | need_more_evidence
     note: str | None = None
     updates: OpportunityReviewUpdates | None = None
+    # T05：驳回原因（reject 时建议填写，取值必须是 OPPORTUNITY_REJECT_REASONS 枚举）
+    reject_reason: str | None = None
 
     @model_validator(mode="after")
     def _validate(self) -> "OpportunityReviewRequest":
-        if self.action not in {"approve", "reject", "edit", "ready"}:
-            raise ValueError("action 必须是 approve / reject / edit / ready 之一")
+        if self.action not in {"approve", "reject", "edit", "ready", "need_more_evidence"}:
+            raise ValueError("action 必须是 approve / reject / edit / ready / need_more_evidence 之一")
+        if self.reject_reason is not None and self.reject_reason not in OPPORTUNITY_REJECT_REASONS:
+            raise ValueError("reject_reason 必须是 OPPORTUNITY_REJECT_REASONS 枚举值")
         return self

@@ -11,6 +11,7 @@ from app.api.v1.endpoints import (
     logs,
     markets,
     opportunities,
+    opportunity_candidates,
     pain_points,
     signal_analysis,
     signals,
@@ -31,6 +32,7 @@ api_router.include_router(signals.router)
 api_router.include_router(signal_analysis.router)
 api_router.include_router(pain_points.router)
 api_router.include_router(opportunities.router)
+api_router.include_router(opportunity_candidates.router)
 api_router.include_router(experiments.router)
 api_router.include_router(sources.router)
 api_router.include_router(source_records.router)

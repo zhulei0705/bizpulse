@@ -31,6 +31,10 @@ def _normalize_stage(stage: str) -> str:
 
 def _serialize_with_counts(db: Session, opportunity: Opportunity, company_names: dict[str, str] | None = None) -> dict:
     data = OpportunityRead.model_validate(opportunity).model_dump()
+    # T05：JSON 字段在 ORM 中为 *_json 命名，序列化为对外字段名
+    data["score_breakdown"] = opportunity.score_breakdown_json or {}
+    data["risk_notes"] = opportunity.risk_notes or []
+    data["validation_questions"] = opportunity.validation_questions or []
     data["evidence_count"] = (
         db.scalar(select(func.count()).select_from(OpportunityEvidence).where(OpportunityEvidence.opportunity_id == opportunity.id)) or 0
     )
@@ -124,12 +128,14 @@ def create_opportunity(payload: OpportunityCreate, db: Session = Depends(get_db)
         agent_fit=payload.agent_fit_score,
         reachability=payload.reachability_score,
         evidence=evidence_score,
-    ))
+    ), reasons={"evidence": [f"D级来源证据强制降分" if evidence_score < payload.evidence_score else "人工填写证据分"]})
     opportunity = Opportunity(
         **payload.model_dump(exclude={"evidence_score"}),
         evidence_score=evidence_score,
         total_score=scored.score,
         grade=scored.grade,
+        score_breakdown_json=scored.breakdown,
+        grade_cap_reason=scored.grade_cap_reason,
     )
     db.add(opportunity)
     db.flush()
@@ -177,9 +183,10 @@ def get_opportunity(opportunity_id: str, db: Session = Depends(get_db)) -> dict:
 
 @router.post("/{opportunity_id}/review")
 def review_opportunity(opportunity_id: str, payload: OpportunityReviewRequest, db: Session = Depends(get_db)) -> dict:
-    """人工审核：approve(通过) / reject(驳回) / edit(修改) / ready(加入验证)。
+    """人工审核：approve(通过) / reject(驳回) / edit(修改) / ready(加入验证) / need_more_evidence(证据不足)。
 
-    审计记录修改前/修改后；通过（approve/ready）时联动验证其关联证据。
+    审计记录修改前/修改后；通过（approve/ready）时联动验证其关联证据；
+    reject 必须带枚举驳回原因（T05）。
     """
     opportunity = db.get(Opportunity, opportunity_id)
     if not opportunity:
@@ -194,8 +201,19 @@ def review_opportunity(opportunity_id: str, payload: OpportunityReviewRequest, d
         opportunity.review_status = "APPROVED"
         _verify_opportunity_evidence(db, opportunity.id, now)
     elif payload.action == "reject":
+        # T05：驳回原因（复盘最重要的数据），必须是枚举值
+        from app.core.constants import OPPORTUNITY_REJECT_REASONS
+        if payload.reject_reason and payload.reject_reason not in OPPORTUNITY_REJECT_REASONS:
+            raise HTTPException(status_code=422, detail=f"reject_reason 必须是 {sorted(OPPORTUNITY_REJECT_REASONS)} 之一")
         opportunity.stage = "REJECTED"
         opportunity.review_status = "REJECTED"
+        opportunity.reject_reason = payload.reject_reason or "OTHER"
+        changes["reject_reason"] = opportunity.reject_reason
+    elif payload.action == "need_more_evidence":
+        # T05：人工标记证据不足 —— 保持 REVIEW 状态、进入复核清单
+        opportunity.review_status = "NEED_MORE_EVIDENCE"
+        if opportunity.stage not in {"NEW", "REVIEW"}:
+            opportunity.stage = "REVIEW"
     elif payload.action == "edit":
         if not payload.updates:
             raise HTTPException(status_code=422, detail="action=edit 时必须提供 updates 字段")
@@ -220,6 +238,8 @@ def review_opportunity(opportunity_id: str, payload: OpportunityReviewRequest, d
                 before["grade"] = opportunity.grade
                 opportunity.total_score = scored.score
                 opportunity.grade = scored.grade
+                opportunity.score_breakdown_json = scored.breakdown
+                opportunity.grade_cap_reason = scored.grade_cap_reason
                 changes["total_score"] = scored.score
                 changes["grade"] = scored.grade
         opportunity.review_status = "EDITED"
