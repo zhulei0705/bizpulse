@@ -204,6 +204,14 @@ def analyze_opportunities_job(db: Session = Depends(get_db)) -> dict:
 def _convert_candidate(db: Session, candidate: OpportunityCandidate, note: str | None) -> Opportunity:
     """候选 → 正式 Opportunity。EvidenceGate 硬门槛：无证据禁止转换。"""
     evidence_count = len(candidate.evidence_refs_json or [])
+    from app.models.signal import Signal
+    from app.models.source import SourceRecord
+    from app.services.evidence_integrity import signal_issues,record_issues
+    for ref in candidate.evidence_refs_json or []:
+        signal=db.get(Signal,ref.get('signal_id')) if ref.get('signal_id') else None
+        record=db.get(SourceRecord,ref.get('source_record_id')) if ref.get('source_record_id') else None
+        if (signal and signal_issues(db,signal)) or (ref.get('source_record_id') and record_issues(record)):
+            raise HTTPException(status_code=422,detail='INVALID_EVIDENCE：候选引用的来源已隔离')
     _, cap_reason = evidence_gate(evidence_count, candidate.evidence_score)
 
     scored_grade = candidate.grade

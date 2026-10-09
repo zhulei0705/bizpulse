@@ -158,8 +158,8 @@ def test_radar_locations_require_real_geo(client):
     client.post("/api/v1/opportunities", json={
         "company_id": company["id"], "primary_signal_id": signal["id"],
         "title": "扩产监控", "problem": "p", "solution": "s",
-        "pain_score": 70, "budget_score": 65, "intent_score": 60, "urgency_score": 55,
-        "agent_fit_score": 70, "reachability_score": 60, "evidence_score": 70,
+        "pain_score": 95, "budget_score": 90, "intent_score": 92, "urgency_score": 88,
+        "agent_fit_score": 90, "reachability_score": 85, "evidence_score": 88,
     })
     data = client.get("/api/v1/radar/summary").json()["data"]
     geo = [loc for loc in data["locations"] if loc["company_id"] == company["id"]]

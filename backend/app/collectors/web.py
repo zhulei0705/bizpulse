@@ -31,7 +31,7 @@ def parse_published_raw(raw: str | None) -> datetime | None:
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d", "%Y/%m/%d", "%Y年%m月%d日"):
         try:
             parsed = datetime.strptime(raw[:19].replace("T", " ").strip(), fmt)
-            return parsed.replace(tzinfo=timezone.utc)
+            return parsed  # 时区未知保持 naive，与采集时间严格区分。
         except ValueError:
             continue
     return None
@@ -91,7 +91,13 @@ class WebPageCollector(CollectorAdapter):
 
         raw_path = self._save_raw_html(self.source.id or "adhoc", page.final_url, page.html[: settings.ingest_max_bytes])
         text = (page.text or "").strip()
-        parse_status = "OK" if text or (page.title or "").strip() else "FAILED"
+        # T08.0 P1-2：解析状态精确化 —— 正文为空不得算解析成功；HTTP 成功但正文极少且 HTML 很大 → JS 渲染页
+        if text or (page.title or "").strip():
+            parse_status = "PARSE_SUCCESS"
+        elif len(page.html) > 5000:
+            parse_status = "JS_RENDER_REQUIRED"
+        else:
+            parse_status = "PARSE_EMPTY"
         return [CollectedItem(
             url=page.final_url,
             canonical_url=canonicalize_url(page.final_url),
@@ -101,7 +107,7 @@ class WebPageCollector(CollectorAdapter):
             http_status=page.status_code,
             content_type=(page.content_type or "").split(";")[0].strip() or None,
             parse_status=parse_status,
-            error_message=None if parse_status == "OK" else "页面无可提取正文内容",
+            error_message=None if parse_status == "PARSE_SUCCESS" else "页面无可提取正文内容",
             extra={
                 "raw_html_path": raw_path,
                 "organization": page.organization,

@@ -28,6 +28,7 @@ from app.analyzers.opportunity.dedup import (
     compute_analysis_input_hash,
     compute_candidate_fingerprint,
     find_active_candidate,
+    find_finalized_candidate,
     find_latest_candidate_with_hash,
 )
 from app.analyzers.opportunity.evidence import compute_evidence_score
@@ -232,9 +233,17 @@ def analyze_company_opportunities(db: Session, company_id: str, *, force: bool =
         db.flush()
         return row
 
-    # 4) 单信号兜底（无组合命中时）：最强信号 → 其指向的 Pain 分类
+    # 4) 单信号兜底（无组合命中时）：最强"当前"信号 → 其指向的 Pain 分类。
+    # T08.2 门（任务书二十三/二十六）：历史信号（已中标等）不得单独触发当前机会；
+    # 全部为历史信号时不生成候选（历史采购不是当下购买窗口）。
     if not drafts:
-        top_signal = max(ctx.signals, key=lambda s: s.signal.confidence)
+        from app.analyzers.opportunity.bundles import _is_current_signal
+
+        current_signals = [s for s in ctx.signals if _is_current_signal(s.signal)]
+        if not current_signals:
+            stats.reason = "only_historical_signals（全部已批准信号为历史事件，不生成当前机会）"
+            return stats
+        top_signal = max(current_signals, key=lambda s: s.signal.confidence)
         from app.analyzers.opportunity.pain import SIGNAL_PAIN_MAP
         fallback_pains = SIGNAL_PAIN_MAP.get(top_signal.signal.signal_type, ["OTHER"])
         drafts = [BundleDraft(
@@ -263,6 +272,7 @@ def analyze_company_opportunities(db: Session, company_id: str, *, force: bool =
     reachability = compute_reachability(ctx)
     evidence = compute_evidence_score(ctx, now=now)
 
+    skipped_finalized = 0
     for draft in drafts:
         bundle_row = persist_bundle(draft) if draft.bundle_type != "SINGLE_SIGNAL" else None
         pains = infer_pains_from_signals(ctx, draft)
@@ -330,6 +340,11 @@ def analyze_company_opportunities(db: Session, company_id: str, *, force: bool =
             published_at=draft.last_signal_at, collected_at=now,
         )
         existing_candidate = find_active_candidate(db, fingerprint)
+        if existing_candidate is None and find_finalized_candidate(db, fingerprint) is not None:
+            # 同指纹候选已终态（已转正式机会/已批准/已拒绝）：人工决策优先，不重建
+            # （fingerprint 全局唯一，直接 INSERT 会撞 UNIQUE 约束）
+            skipped_finalized += 1
+            continue
 
         confidence = bundle_confidence_for(draft.confidence, llm_result)
 
@@ -408,10 +423,13 @@ def analyze_company_opportunities(db: Session, company_id: str, *, force: bool =
         if candidate.status == "NEED_MORE_EVIDENCE":
             stats.need_more_evidence += 1
 
+    if skipped_finalized and not stats.candidates_created and not stats.candidates_updated:
+        stats.reason = f"candidates_finalized({skipped_finalized})"
     write_audit(db, "OPPORTUNITY_ANALYZED", "company", company_id, {
         "bundles": [d.bundle_type for d in drafts],
         "candidates_created": stats.candidates_created,
         "candidates_updated": stats.candidates_updated,
+        "candidates_skipped_finalized": skipped_finalized,
         "llm_used": stats.llm_used,
         "analysis_input_hash": input_hash,
     })

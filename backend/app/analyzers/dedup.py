@@ -68,6 +68,11 @@ def find_duplicate_signal(db: Session, fingerprint: str, *, within_days: int | N
 
 def merge_evidence(db: Session, signal: Signal, *, source_record_id: str, quoted_text: str, start_offset: int | None, end_offset: int | None, confidence: int) -> bool:
     """多来源合并：向既有 Signal 追加新来源证据（同记录去重）；返回是否发生合并。"""
+    from app.models.source import SourceRecord
+    from app.services.evidence_integrity import record_issues, exact_reference
+    record = db.get(SourceRecord, source_record_id)
+    if record_issues(record) or not exact_reference(record.raw_text or '', quoted_text, start_offset, end_offset):
+        raise ValueError('INVALID_EVIDENCE：合并证据必须精确引用可信版本')
     existing = db.scalar(
         select(SignalEvidence).where(
             SignalEvidence.signal_id == signal.id,

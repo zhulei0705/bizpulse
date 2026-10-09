@@ -41,12 +41,15 @@ def _detect_language(text: str) -> str | None:
 
 def _parse_published(value) -> datetime | None:
     if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return value  # 未知时区保留，不猜 UTC
     return None
 
 
 def persist_collected(db: Session, source: Source, item: CollectedItem, *, extract_signals: bool = True) -> tuple[SourceRecord, str]:
     """入库一条采集结果，返回 (record, outcome)。outcome: CREATED / UPDATED_VERSION / SKIPPED_UNCHANGED / FAILED。"""
+    if source.collector_type == "crawl4ai":
+        from app.collectors.crawl4ai_adapter import validate_crawl_evidence
+        validate_crawl_evidence(item)
     fingerprint = item.content_hash()
     canonical = item.canonical_url or item.url
 
@@ -58,7 +61,7 @@ def persist_collected(db: Session, source: Source, item: CollectedItem, *, extra
         )
     )
 
-    if latest and latest.content_hash == fingerprint and item.parse_status == "OK":
+    if latest and latest.content_hash == fingerprint and item.parse_status in {"OK", "PARSE_SUCCESS"}:
         latest.checked_at = datetime.now(timezone.utc)
         return latest, "SKIPPED_UNCHANGED"
 
@@ -89,17 +92,19 @@ def persist_collected(db: Session, source: Source, item: CollectedItem, *, extra
         latest.is_latest = False
     db.add(new_record)
     db.flush()
+    from app.services.evidence_integrity import text_contract
+    new_record.metadata_json = {**new_record.metadata_json, 'evidence_text_contract': text_contract(new_record)}
 
     outcome = "FAILED" if item.parse_status == "FAILED" else ("UPDATED_VERSION" if latest is not None else "CREATED")
 
     # 企业关联（仅新记录；版本记录沿用父版本关联）
-    if outcome == "CREATED":
+    if outcome == "CREATED" and source.collector_type != "crawl4ai":
         record, result = resolve_record_company(db, new_record, organization)
         if result.status in {"EXACT", "HIGH_CONFIDENCE"} and record.company_id:
             company = db.get(Company, record.company_id)
             if company:
                 company.source_count = (company.source_count or 0) + 1
-        elif item.parse_status == "OK":
+        elif item.parse_status in {"OK", "PARSE_SUCCESS"}:
             # Resolver 未给出自动关联时，回退 T02 的「官方域名/名称建档」能力（同样基于域名与明确名称，不猜）
             page_like = extractor.FetchedItemAdapter(item)
             company = resolve_or_create_company(db, extractor.identify_company(page_like), page_like)
@@ -113,7 +118,7 @@ def persist_collected(db: Session, source: Source, item: CollectedItem, *, extra
     })
 
     # Signal 提取（保守：仅对真实正文规则提取；每条 Signal 关联 source_record）
-    if extract_signals and outcome in {"CREATED", "UPDATED_VERSION"} and item.raw_text and new_record.company_id:
+    if extract_signals and source.collector_type != "crawl4ai" and outcome in {"CREATED", "UPDATED_VERSION"} and item.raw_text and new_record.company_id:
         page_like = extractor.FetchedItemAdapter(item)
         create_rule_signals(db, db.get(Company, new_record.company_id), new_record, page_like)
 

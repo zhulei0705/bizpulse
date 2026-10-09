@@ -34,7 +34,7 @@ RULES: list[SignalRule] = [
     SignalRule("TECH_HIRING", "技术招聘", (r"(招聘|急聘|热招)[^0-9]{0,8}(软件|后端|前端|开发|架构师|测试|运维|程序员)", r"(后端|前端|全栈|架构师)工程师[^0-9]{0,6}(招聘|急聘)"), 72),
     SignalRule("CUSTOMER_SERVICE_HIRING", "客服招聘", (r"(招聘|急聘)[^0-9]{0,8}(客服|客户服务|客户成功|售后)", r"(客服专员|客户成功经理|售后服务)[^0-9]{0,6}(招聘|急聘)"), 72),
     SignalRule("FINANCE_HIRING", "财务招聘", (r"(招聘|急聘)[^0-9]{0,8}(财务|会计|审计|税务)", r"(财务经理|会计|审计员|税务专员)[^0-9]{0,6}(招聘|急聘)"), 70),
-    SignalRule("HIRING", "招聘扩张", (r"(诚聘|急聘|热招|加入我们|join\s+us|we.?re\s+hiring|人才招聘|校园招聘|社会招聘)", r"招聘\d+名", r"新增\d+个?(销售|技术|研发|岗位|职位)"), 62),
+    SignalRule("HIRING", "招聘扩张", (r"(诚聘|诚邀英才|急聘|热招|加入我们|join\s+us|we.?re\s+hiring|人才招聘|校园招聘|社会招聘|职等你来)", r"招聘\d+名", r"新增\d+个?(销售|技术|研发|岗位|职位)"), 62),
     # ---- 融资 ----
     SignalRule("FUNDING", "融资事件", (r"完成.{0,10}(天使轮|Pre-[A-Z]\+?轮|[ABC]\+?轮|战略融资|股权融资)", r"(获得|宣布).{0,12}(融资|投资)", r"(亿元|万美元|千万).{0,4}(融资|投资)"), 85, review_always=True),
     # ---- 扩张族 ----
@@ -106,6 +106,63 @@ _EXCERPT_WINDOW = 60
 # 泛化 HIRING 被更具体类型覆盖时不重复输出
 _HIRING_FAMILY = {"SALES_HIRING", "AI_HIRING", "TECH_HIRING", "CUSTOMER_SERVICE_HIRING", "FINANCE_HIRING"}
 
+# ---------------------------------------------------------------------------
+# T08.0 P0-3：采购/招标上下文抑制 —— 采购/招标页面只产采购族信号
+# ---------------------------------------------------------------------------
+
+_PROCUREMENT_CONTEXT_PATTERN = re.compile(
+    r"(招标公告|中标公告|成交公告|采购公告|竞标公告|询价公告|磋商公告|招标编号|采购项目编号|"
+    r"公开招标|竞争性磋商|邀请招标|单一来源|采购项目|投标人|供应商资格)", re.I
+)
+_SUPPRESSED_IN_PROCUREMENT = {
+    "NEW_PRODUCT", "NEW_SERVICE", "NEW_MARKET", "NEW_FACTORY", "NEW_OFFICE",
+    "OVERSEAS_EXPANSION", "EXPANSION", "FUNDING", "PARTNERSHIP",
+    "STRATEGIC_COOPERATION", "MANAGEMENT_CHANGE", "POLICY_IMPACT",
+    "CUSTOMER_COMPLAINT", "COST_PRESSURE", "EFFICIENCY_PROBLEM",
+    "DIGITAL_TRANSFORMATION", "AI_TRANSFORMATION", "MANUAL_WORK", "DATA_PROBLEM",
+}
+
+# T08.2 批次质检修复1：岗位 JD 页 —— "任职资格/岗位职责"语境里什么词都可能出现
+# （JD 提到"采购周期"≠采购需求），除招聘族外全部抑制。
+_JOB_DESCRIPTION_CONTEXT_PATTERN = re.compile(
+    r"(任职资格|岗位职责|工作职责|岗位要求|职位描述|职位职责|简历投递|应聘方式)", re.I
+)
+_HIRING_FAMILY_ALL = {
+    "HIRING", "SALES_HIRING", "AI_HIRING", "TECH_HIRING",
+    "CUSTOMER_SERVICE_HIRING", "FINANCE_HIRING", "PROCUREMENT_HIRING", "SUPPLY_CHAIN_HIRING",
+}
+
+# T08.2 批次质检修复2：发展历程页 —— 时间线上的"完成C轮融资/更名"是历史沿革不是近期事件
+_HISTORY_TIMELINE_CONTEXT_PATTERN = re.compile(
+    r"(发展历程|公司历程|大事记|企业沿革|发展沿革|历史沿革|里程碑)", re.I
+)
+_SUPPRESSED_IN_TIMELINE = {
+    "FUNDING", "EXPANSION", "PARTNERSHIP", "STRATEGIC_COOPERATION",
+    "NEW_PRODUCT", "NEW_SERVICE", "NEW_MARKET", "NEW_FACTORY", "NEW_OFFICE",
+    "OVERSEAS_EXPANSION", "MANAGEMENT_CHANGE",
+}
+
+
+def is_job_description_context(text: str | None) -> bool:
+    """页面是否为岗位 JD / 招聘说明（真实结构化上下文）。"""
+    if not text:
+        return False
+    return bool(_JOB_DESCRIPTION_CONTEXT_PATTERN.search(text[:60_000]))
+
+
+def is_history_timeline_context(text: str | None) -> bool:
+    """页面是否为发展历程/大事记时间线。"""
+    if not text:
+        return False
+    return bool(_HISTORY_TIMELINE_CONTEXT_PATTERN.search(text[:60_000]))
+
+
+def is_procurement_context(text: str | None) -> bool:
+    """页面是否为采购/招标公告（真实结构化上下文，非 LLM 猜测）。"""
+    if not text:
+        return False
+    return bool(_PROCUREMENT_CONTEXT_PATTERN.search(text[:60_000]))
+
 
 @dataclass
 class CandidateDraft:
@@ -133,14 +190,26 @@ def _is_generic_subject(text: str, start: int) -> bool:
 
 
 def run_signal_rules(text: str, source_type: str | None = None, *, max_candidates: int = 10) -> list[CandidateDraft]:
-    """对真实正文运行规则引擎 → 候选草稿（去负面/泛指/家族去重，带 offset）。"""
+    """对真实正文运行规则引擎 → 候选草稿（去负面/泛指/家族去重，带 offset）。
+
+    T08.0 P0-3：采购/招标公告上下文中抑制 NEW_PRODUCT/POLICY_IMPACT 等非采购族误判。
+    """
     if not text:
         return []
     haystack = text[:60_000]
+    procurement = is_procurement_context(haystack)
+    job_description = is_job_description_context(haystack)
+    timeline = is_history_timeline_context(haystack)
     hints = SOURCE_TYPE_HINT.get(source_type or "", ())
     drafts: list[CandidateDraft] = []
     seen_types: set[str] = set()
     for rule in RULES:
+        if procurement and rule.signal_type in _SUPPRESSED_IN_PROCUREMENT:
+            continue
+        if job_description and rule.signal_type not in _HIRING_FAMILY_ALL:
+            continue  # JD 页只产招聘族信号（JD 里"采购/AI/融资"字样不是企业事件）
+        if timeline and rule.signal_type in _SUPPRESSED_IN_TIMELINE:
+            continue  # 发展历程页的历史事件不是近期信号
         regex = re.compile("|".join(rule.patterns), re.I)
         match = regex.search(haystack)
         if not match:
@@ -151,13 +220,20 @@ def run_signal_rules(text: str, source_type: str | None = None, *, max_candidate
         if _is_generic_subject(haystack, start):
             continue  # 行业泛指：不归属该企业
         confidence = rule.confidence + (6 if rule.signal_type in hints else 0)
-        excerpt_start = max(0, start - _EXCERPT_WINDOW)
-        excerpt_end = min(len(haystack), end + _EXCERPT_WINDOW)
+        # T08.0 P0-2：Evidence 质量门 —— 导航/footer/热线窗口被替换为实质句；全低质则放弃该候选
+        from app.services.evidence_quality import extract_valid_evidence
+
+        evidence_text = extract_valid_evidence(haystack, start, end)
+        if not evidence_text:
+            continue
+        evidence_start = haystack.find(evidence_text)
+        if evidence_start < 0:
+            continue
         drafts.append(CandidateDraft(
             candidate_type=rule.signal_type,
-            evidence_text=haystack[excerpt_start:excerpt_end].strip(),
-            start_offset=excerpt_start,
-            end_offset=excerpt_end,
+            evidence_text=evidence_text,
+            start_offset=max(0, evidence_start),
+            end_offset=max(0, evidence_start) + len(evidence_text),
             rule_confidence=min(confidence, 95),
             review_always=rule.review_always,
             extra={"label": rule.label, "review_always": rule.review_always},

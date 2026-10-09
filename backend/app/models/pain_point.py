@@ -1,7 +1,9 @@
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, new_id
+
+from datetime import datetime
 
 
 class PainPoint(TimestampMixin, Base):
@@ -15,6 +17,10 @@ class PainPoint(TimestampMixin, Base):
     confidence: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     reason: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(30), default="INFERRED", nullable=False, index=True)
+    # T06：CONFIRMED 只能来自真实客户确认（会议/访谈），记录确认来源互动
+    confirmed_by_interaction_id: Mapped[str | None] = mapped_column(String(32))
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    confirmed_by: Mapped[str | None] = mapped_column(String(100))
 
     company: Mapped["Company"] = relationship(back_populates="pain_points")
     market: Mapped["Market | None"] = relationship(back_populates="pain_points")

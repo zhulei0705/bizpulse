@@ -13,6 +13,16 @@ from app.core.config import settings
 from app.core.constants import SIGNAL_BUNDLE_TYPES
 
 
+def _is_current_signal(signal) -> bool:
+    """T08.2 机会生成门（任务书二十六/二十三）：HISTORICAL_SIGNAL / NOT_ACTIONABLE
+    的信号（如已中标 CONTRACT_AWARD）不得作为组合的核心或辅助触发；
+    只能作为背景证据（证据分仍按真实证据计算）。"""
+    from app.services.actionability import compute_actionability_by_rules
+
+    status = compute_actionability_by_rules(signal)
+    return status not in {"HISTORICAL_SIGNAL", "NOT_ACTIONABLE"}
+
+
 @dataclass
 class BundleDraft:
     bundle_type: str
@@ -113,10 +123,10 @@ def build_signal_bundles(ctx: CompanyAnalysisContext, *, window_days: int | None
     drafts: list[BundleDraft] = []
 
     for bundle_type, rule in BUNDLE_RULES.items():
-        core_hits = [s for s in ctx.signals if s.signal.signal_type in rule["core"]]
+        core_hits = [s for s in ctx.signals if s.signal.signal_type in rule["core"] and _is_current_signal(s.signal)]
         if not core_hits:
             continue
-        support_hits = [s for s in ctx.signals if s.signal.signal_type in rule["support"]]
+        support_hits = [s for s in ctx.signals if s.signal.signal_type in rule["support"] and _is_current_signal(s.signal)]
         members = core_hits + [s for s in support_hits if s not in core_hits]
 
         types = sorted({s.signal.signal_type for s in members})

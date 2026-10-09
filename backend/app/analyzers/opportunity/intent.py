@@ -42,6 +42,10 @@ def compute_intent(ctx: CompanyAnalysisContext, *, now: datetime | None = None) 
     else:
         direct_score = 0
         reasons.append("未发现公开采购/招标/系统选型等直接购买信号")
+    # T08.1：CONTRACT_AWARD 是"合同已授予"的既成事实，不是"正在寻找供应商"，
+    # 绝不能因中标公告把购买意图抬成高意向（AWARDED ≠ active purchase intent）。
+    if "CONTRACT_AWARD" in types:
+        reasons.append("CONTRACT_AWARD 为已完成的中标事实，不计入购买意图（仅可作为供应商能力/历史采购证据）")
 
     # 2) 问题证据（20%）
     problems = [t for t in types if t in _PROBLEM_SIGNALS]

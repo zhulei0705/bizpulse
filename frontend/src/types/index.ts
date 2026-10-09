@@ -4,6 +4,8 @@ export type HealthStatus = {
   environment: string
 }
 
+export * from './validation'
+
 export type SystemInfo = {
   name: string
   version: string
@@ -56,6 +58,19 @@ export const OPPORTUNITY_STAGE_LABELS: Record<string, string> = {
 export const OPPORTUNITY_STAGES = Object.keys(OPPORTUNITY_STAGE_LABELS)
 
 export const GRADE_LABELS: Record<string, string> = { S: 'S级', A: 'A级', B: 'B级', C: 'C级', D: 'D级' }
+
+// 机会候选拒绝原因（与 backend OPPORTUNITY_REJECT_REASONS 一致，复盘用）
+export const OPPORTUNITY_REJECT_REASONS: Record<string, string> = {
+  NO_REAL_PROBLEM: '无真实问题',
+  WEAK_EVIDENCE: '证据不足',
+  WRONG_INTERPRETATION: '解读有误',
+  LOW_VALUE: '价值过低',
+  NO_BUDGET_SIGNAL: '无预算信号',
+  NOT_REACHABLE: '无法触达',
+  DUPLICATE: '重复机会',
+  BAD_TIMING: '时机不对',
+  OTHER: '其他',
+}
 
 export const SOURCE_GRADE_LABELS: Record<string, string> = {
   A: '官方/权威来源',
@@ -173,6 +188,11 @@ export type Opportunity = {
   created_at: string
   updated_at: string
   evidences?: OpportunityEvidenceRow[]
+  // T06 真实验证信息
+  observed_intent?: string | null
+  confirmed_budget?: string | null
+  last_contacted_at?: string | null
+  contact_count?: number
 }
 
 export type OpportunityEvidenceRow = {
@@ -184,6 +204,74 @@ export type OpportunityEvidenceRow = {
   weight: number
   url?: string | null
   title?: string | null
+}
+
+// ---------------------------------------------------------------------------
+// T05 机会判断引擎：候选（AI 生成 → 人工审核 → 转正式机会）
+// ---------------------------------------------------------------------------
+
+export const OPPORTUNITY_CANDIDATE_STATUS_LABELS: Record<string, string> = {
+  DETECTED: '已发现',
+  REVIEW: '待审核',
+  NEED_MORE_EVIDENCE: '证据不足',
+  APPROVED: '已通过',
+  CONVERTED: '已转机会',
+  REJECTED: '已拒绝',
+}
+
+export type CandidateEvidenceRef = {
+  signal_id: string
+  source_record_id: string | null
+  polarity: string
+  grade: string | null
+  excerpt: string
+  url?: string | null
+}
+
+export type OpportunityCandidate = {
+  id: string
+  company_id: string
+  company_name?: string | null
+  bundle_id: string | null
+  pain_point_id: string | null
+  title: string
+  problem_hypothesis: string
+  solution_hypothesis: string
+  value_hypothesis: string | null
+  trigger_summary: string | null
+  why_now: string | null
+  evidence_summary: string | null
+  recommended_next_action: string | null
+  signal_ids: string[]
+  pain_category: string | null
+  pain_category_label?: string | null
+  solution_category: string | null
+  pain_score: number
+  budget_score: number
+  intent_score: number
+  urgency_score: number
+  agent_fit_score: number
+  reachability_score: number
+  evidence_score: number
+  total_score: number
+  grade: string
+  grade_cap_reason: string | null
+  confidence: number
+  score_breakdown: Record<string, unknown>
+  risk_notes: string[]
+  validation_questions: string[]
+  evidence_refs: CandidateEvidenceRef[]
+  contradicting_evidence: CandidateEvidenceRef[]
+  status: string
+  generated_by: string | null
+  prompt_version: string | null
+  reject_reason: string | null
+  review_note: string | null
+  reviewed_by: string | null
+  reviewed_at: string | null
+  opportunity_id: string | null
+  created_at: string
+  updated_at: string
 }
 
 export type SourceRecord = {

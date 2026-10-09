@@ -36,6 +36,11 @@ def test_multi_source_merge_into_single_signal(client):
         approve = client.post(f"/api/v1/signal-candidates/{cand.id}/approve", json={"note": "官网事实"})
         assert approve.status_code == 200
         run_extractor(db, rec2)
+        # 新来源只能待审；显式人工操作后才进入已批准信号证据链。
+        pending=db.query(SignalCandidate).filter_by(source_record_id=rec2.id).first()
+        assert pending.status=='REVIEW_REQUIRED'
+        from app.analyzers.extractor import approve_candidate_manually
+        approve_candidate_manually(db,pending,actor='offline-test-reviewer')
 
         signals = db.query(Signal).filter(Signal.company_id == company["id"], Signal.signal_type == "OVERSEAS_EXPANSION").all()
         assert len(signals) == 1

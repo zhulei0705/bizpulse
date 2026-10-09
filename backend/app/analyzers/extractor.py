@@ -28,6 +28,7 @@ from app.models.company import Company
 from app.models.signal import Signal, SignalCandidate, SignalEvidence
 from app.models.source import Source, SourceRecord
 from app.services.audit import write_audit
+from app.services.evidence_integrity import exact_reference, locate_exact, record_issues, text_contract
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +54,15 @@ def _candidate_title(draft: CandidateDraft, record: SourceRecord) -> str:
     return f"{label}：{(record.title or record.url)[:60]}"[:500]
 
 
-def _approve_candidate_into_signal(db: Session, candidate: SignalCandidate, record: SourceRecord, confidence_explanation: dict) -> Signal:
+def _approve_candidate_into_signal(db: Session, candidate: SignalCandidate, record: SourceRecord, confidence_explanation: dict, *, actor: str | None = None) -> Signal:
     """候选 → 正式 Signal（含原文 Evidence、fact/inference、生命周期字段）。
 
     Signal.company_id 为 NOT NULL：无企业关联的候选不允许直接批准（先人工关联企业）。
     """
+    if not actor or not actor.strip():
+        raise ValueError('批准必须来自明确人工审核并提供 actor')
+    if record_issues(record) or not exact_reference(record.raw_text or '', candidate.evidence_text, candidate.start_offset, candidate.end_offset):
+        raise ValueError('INVALID_EVIDENCE：版本、快照或精确偏移不可信，需人工复核')
     if not candidate.company_id:
         raise ValueError("候选未关联企业：请先通过 /source-records/{id}/assign-company 关联企业后再审核")
     company_id = candidate.company_id
@@ -89,6 +94,8 @@ def _approve_candidate_into_signal(db: Session, candidate: SignalCandidate, reco
             "llm_confidence": candidate.llm_confidence,
             "structured": candidate.structured_json,
             "source_record_version": record.version_number,
+            "evidence_text_contract": text_contract(record),
+            "human_review": {"actor": actor, "action": "APPROVE", "reviewed_at": datetime.now(timezone.utc).isoformat()},
         },
     )
     db.add(signal)
@@ -96,19 +103,19 @@ def _approve_candidate_into_signal(db: Session, candidate: SignalCandidate, reco
     db.add(SignalEvidence(
         signal_id=signal.id,
         source_record_id=record.id,
-        quoted_text=(candidate.evidence_text or "")[:2000],
+        quoted_text=candidate.evidence_text,
         start_offset=candidate.start_offset,
         end_offset=candidate.end_offset,
         confidence=candidate.final_confidence,
     ))
     candidate.status = "APPROVED"
     candidate.signal_id = signal.id
-    candidate.reason = (candidate.reason or "") + " | 自动批准：置信度与证据校验通过"
+    candidate.reason = (candidate.reason or "") + " | 人工批准：精确证据校验通过"
     if company_id:
-        write_audit(db, "SIGNAL_AUTO_APPROVED", "signal", signal.id, {
+        write_audit(db, "SIGNAL_HUMAN_APPROVED", "signal", signal.id, {
             "candidate_id": candidate.id, "confidence": signal.confidence,
             "fingerprint": fingerprint, "source_record_id": record.id,
-        })
+        }, actor=actor)
     return signal
 
 
@@ -135,19 +142,15 @@ def _evidence_in_source(evidence_text: str | None, source_text: str) -> bool:
     """Evidence 原文校验：LLM 返回的片段必须可在原文中找到（忽略首尾空白）。"""
     if not evidence_text:
         return False
-    needle = " ".join(evidence_text.split())
-    if not needle:
-        return False
-    if needle in source_text:
-        return True
-    # 容忍换行差异
-    flattened = " ".join(source_text.split())
-    return needle in flattened
+    return bool(evidence_text.strip() and evidence_text in source_text)
 
 
 def run_extractor(db: Session, record: SourceRecord, *, force: bool = False) -> ExtractStats:
     """对单条 SourceRecord 执行信号提取（幂等：已分析且 hash 未变的记录默认跳过）。"""
     stats = ExtractStats(source_record_id=record.id)
+    if record_issues(record):
+        stats.errors.append('INVALID_EVIDENCE：来源隔离或版本/快照不可用')
+        return stats
     source_text = record.raw_text or ""
     if not source_text.strip():
         stats.errors.append("正文为空，跳过分析")
@@ -225,7 +228,10 @@ def run_extractor(db: Session, record: SourceRecord, *, force: bool = False) -> 
                 evidence_text = llm_evidence
 
         # 3) Evidence 原文校验（不通过 → 不得自动批准）
-        evidence_ok = _evidence_in_source(evidence_text, source_text)
+        evidence_text = (evidence_text or '')[:2000]
+        span = locate_exact(source_text, evidence_text)
+        draft.start_offset, draft.end_offset = span if span else (None, None)
+        evidence_ok = bool(span and exact_reference(source_text, evidence_text, *span))
 
         # 4) Confidence（代码计算，非 LLM 输出）
         conf = compute_signal_confidence(
@@ -240,7 +246,7 @@ def run_extractor(db: Session, record: SourceRecord, *, force: bool = False) -> 
         # 5) 指纹去重与多来源合并
         fingerprint = _fingerprint_for(record, record.company_id, draft.candidate_type, evidence_text or draft.candidate_type)
         existing = find_duplicate_signal(db, fingerprint)
-        if existing is not None:
+        if existing is not None and not settings.no_auto_approval and evidence_ok:
             merged = merge_evidence(db, existing, source_record_id=record.id, quoted_text=evidence_text or "", start_offset=draft.start_offset, end_offset=draft.end_offset, confidence=conf.score)
             status = "MERGED" if merged else "REJECTED"
             reason = "与既有 Signal 同指纹，多来源合并" if merged else "同来源已有该事件证据"
@@ -260,7 +266,8 @@ def run_extractor(db: Session, record: SourceRecord, *, force: bool = False) -> 
 
         # 6) 落库候选 + 自动批准判定
         auto_ok = (
-            evidence_ok
+            not settings.no_auto_approval
+            and evidence_ok
             and conf.score >= settings.signal_auto_approve_threshold
             and grade in {"A", "B"}
             and not draft.extra.get("review_always", False)
@@ -283,8 +290,9 @@ def run_extractor(db: Session, record: SourceRecord, *, force: bool = False) -> 
         db.add(candidate)
         db.flush()
         if auto_ok:
-            _approve_candidate_into_signal(db, candidate, record, conf.explanation)
-            stats.auto_approved += 1
+            # 本阶段所有采集衍生信号仅待审；即使配置误关开关也不能跳过人工 actor。
+            candidate.status = 'REVIEW_REQUIRED'
+            stats.review_required += 1
         else:
             stats.review_required += 1
         if not evidence_ok:
@@ -315,7 +323,7 @@ def run_change_detection(db: Session, new_record: SourceRecord) -> int:
     for change in changes:
         fingerprint = _fingerprint_for(new_record, new_record.company_id, change.candidate_type, change.evidence_text)
         existing = find_duplicate_signal(db, fingerprint)
-        if existing is not None:
+        if existing is not None and not settings.no_auto_approval:
             merge_evidence(db, existing, source_record_id=new_record.id, quoted_text=change.evidence_text, start_offset=change.start_offset, end_offset=change.end_offset, confidence=change.rule_confidence)
             continue
         grade = _source_grade(db, new_record.source_id)
@@ -342,9 +350,10 @@ def run_change_detection(db: Session, new_record: SourceRecord) -> int:
     return created
 
 
-def approve_candidate_manually(db: Session, candidate: SignalCandidate, *, note: str | None = None, reject: bool = False) -> Signal | None:
+def approve_candidate_manually(db: Session, candidate: SignalCandidate, *, note: str | None = None, reject: bool = False, actor: str = 'local-user') -> Signal | None:
     """人工审核候选：approve → 正式 Signal；reject → REJECTED。写 AuditLog（before/after）。"""
     before = {"status": candidate.status}
+    if not actor or not actor.strip():raise ValueError('人工审核必须提供 actor')
     record = db.get(SourceRecord, candidate.source_record_id)
     if reject:
         candidate.status = "REJECTED"
@@ -365,7 +374,17 @@ def approve_candidate_manually(db: Session, candidate: SignalCandidate, *, note:
         company_resolve_status=record.company_resolve_status or "UNRESOLVED",
     )
     candidate.final_confidence = conf.score
-    signal = _approve_candidate_into_signal(db, candidate, record, conf.explanation)
-    write_audit(db, "SIGNAL_CANDIDATE_APPROVED", "signal", signal.id, {"before": before, "after": {"status": "APPROVED"}, "note": note, "candidate_id": candidate.id})
+    if record_issues(record) or not exact_reference(record.raw_text or '', candidate.evidence_text, candidate.start_offset, candidate.end_offset):
+        raise ValueError('INVALID_EVIDENCE：人工批准前必须通过精确版本校验')
+    existing = find_duplicate_signal(db,candidate.fingerprint)
+    if existing:
+        from app.services.evidence_integrity import signal_issues
+        if signal_issues(db,existing):raise ValueError('INVALID_EVIDENCE：既有信号隔离，不能合并')
+        merge_evidence(db,existing,source_record_id=record.id,quoted_text=candidate.evidence_text,start_offset=candidate.start_offset,end_offset=candidate.end_offset,confidence=candidate.final_confidence)
+        candidate.status='MERGED';candidate.signal_id=existing.id
+        write_audit(db,'SIGNAL_HUMAN_MERGED','signal',existing.id,{'candidate_id':candidate.id,'source_record_id':record.id,'reviewed_at':datetime.now(timezone.utc).isoformat(),'note':note},actor=actor)
+        db.commit();return existing
+    signal = _approve_candidate_into_signal(db, candidate, record, conf.explanation, actor=actor)
+    write_audit(db, "SIGNAL_CANDIDATE_APPROVED", "signal", signal.id, {"before": before, "after": {"status": "APPROVED"}, "note": note, "candidate_id": candidate.id}, actor=actor)
     db.commit()
     return signal

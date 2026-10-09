@@ -6,6 +6,7 @@ import type {
   DashboardSummary,
   IngestResult,
   Opportunity,
+  OpportunityCandidate,
   PageData,
   RadarSummary,
   RadarSummaryData,
@@ -125,6 +126,46 @@ export async function reviewOpportunity(id: string, input: ReviewInput) {
 export async function updateOpportunityStage(id: string, stage: string) {
   const res = await apiClient.patch(`/opportunities/${id}/stage`, { stage })
   return unwrap<Opportunity>(res.data)
+}
+
+// ---------------------------------------------------------------------------
+// T05 机会判断引擎：候选生成与人工审核
+// ---------------------------------------------------------------------------
+
+export function getOpportunityCandidates(params: ListParams = {}) {
+  return getList<OpportunityCandidate>('/opportunity-candidates', params)
+}
+
+export async function getOpportunityCandidate(id: string) {
+  const res = await apiClient.get(`/opportunity-candidates/${id}`)
+  return unwrap<OpportunityCandidate>(res.data)
+}
+
+export type CandidateReviewInput = { note?: string; reject_reason?: string }
+
+export async function approveCandidate(id: string, input: CandidateReviewInput = {}) {
+  const res = await apiClient.post(`/opportunity-candidates/${id}/approve`, input)
+  return unwrap<{ candidate_id: string; status: string; opportunity_id: string }>(res.data)
+}
+
+export async function rejectCandidate(id: string, input: CandidateReviewInput = {}) {
+  const res = await apiClient.post(`/opportunity-candidates/${id}/reject`, input)
+  return unwrap<{ candidate_id: string; status: string; reject_reason: string }>(res.data)
+}
+
+export async function candidateNeedMoreEvidence(id: string, input: CandidateReviewInput = {}) {
+  const res = await apiClient.post(`/opportunity-candidates/${id}/need-more-evidence`, input)
+  return unwrap<{ candidate_id: string; status: string }>(res.data)
+}
+
+export async function analyzeCompanyOpportunities(companyId: string, force = false) {
+  const res = await apiClient.post(`/companies/${companyId}/analyze-opportunities`, { force })
+  return unwrap<{ company_id: string; status: string; reason: string | null; candidates_created: number; candidates_updated: number; need_more_evidence: number; bundles: number; llm_used: boolean }>(res.data)
+}
+
+export async function runOpportunityAnalysisJob() {
+  const res = await apiClient.post('/jobs/analyze-opportunities')
+  return unwrap<{ job_id: string; total: number; analyzed: number; skipped: number; created: number; updated: number; need_more_evidence: number; failed: number; stale_marked: number }>(res.data)
 }
 
 // sources & records

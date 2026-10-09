@@ -148,9 +148,16 @@ def create_signal(payload: SignalCreate, db: Session = Depends(get_db)) -> dict:
         payload.source_record_id = record.id
 
     data = payload.model_dump(exclude={"evidence_url", "evidence_title"})
+    data['status'] = 'REVIEW'  # 创建与人工批准分开，调用方不能夹带 APPROVED/VALID。
     signal = Signal(**data)
     db.add(signal)
     db.flush()
+    from app.models.signal import SignalEvidence
+    from app.services.evidence_integrity import locate_exact
+    quote=payload.description or record.raw_text or ''
+    span=locate_exact(record.raw_text or '', quote)
+    if span:
+        db.add(SignalEvidence(signal_id=signal.id,source_record_id=record.id,quoted_text=quote,start_offset=span[0],end_offset=span[1],confidence=signal.confidence))
     write_audit(db, "CREATE", "signal", signal.id, {"signal_type": signal.signal_type, "company_id": signal.company_id})
     db.commit()
     db.refresh(signal)

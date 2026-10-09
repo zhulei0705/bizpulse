@@ -1,6 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -23,9 +23,20 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite:///{(BASE_DIR / 'data' / 'bizpulse.db').as_posix()}"
     log_level: str = "INFO"
     log_dir: str = str(BASE_DIR / "logs")
-    cors_origins: str = "http://localhost:5173"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     no_fake_data: bool = True
+    real_data_only: bool = True
+    no_fake_evidence: bool = True
+    no_unverified_fact: bool = True
+    no_auto_approval: bool = True
+
+    @field_validator('no_auto_approval')
+    @classmethod
+    def enforce_no_auto_approval(cls, value):
+        # 先由 bool 类型解析环境字符串 true，再执行不可关闭的阶段门禁。
+        if not value:raise ValueError('T10-C1.1 阶段 NO_AUTO_APPROVAL 必须为 TRUE')
+        return True
     default_page_size: int = 20
     max_page_size: int = 100
 
@@ -53,6 +64,15 @@ class Settings(BaseSettings):
     signal_dedup_window_days: int = 14
     # T04：Signal 自动批准门槛（confidence≥85 且来源 A/B 且证据原文可寻）
     signal_auto_approve_threshold: int = 85
+
+    # T08.2 Reachability 渠道权重（任务书二十：官网公开邮箱 > 官方表单 > 仅总机电话）
+    reachability_weights: dict = {
+        "VERIFIED_EMAIL": 80,
+        "VERIFIED_FORM": 65,
+        "VERIFIED_PHONE": 55,
+        "UNVERIFIED": 40,
+        "WEBSITE_ONLY": 45,
+    }
 
     # T05：Opportunity 总评分权重（Pain25/Budget20/Intent20/Urgency10/AgentFit10/Reach5/Evidence10）
     opportunity_score_weights: dict = {

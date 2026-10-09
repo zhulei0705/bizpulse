@@ -1,4 +1,4 @@
-"""手动 URL 分析的底层能力：安全抓取、正文解析、企业识别、规则信号提取。
+﻿"""手动 URL 分析的底层能力：安全抓取、正文解析、企业识别、规则信号提取。
 
 安全红线（SSRF）：
 - 只允许 http/https；
@@ -19,6 +19,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.core.config import settings
+from app.core.constants import is_source_platform_domain
 
 _SAFE_NETWORKS = [
     ipaddress.ip_network("127.0.0.0/8"),
@@ -51,6 +52,9 @@ def validate_public_url(url: str) -> str:
     if not raw.startswith(("http://", "https://")):
         raw = f"https://{raw}"
     parsed = urlparse(raw)
+    from app.services.url_safety import assert_no_credentials
+    try:assert_no_credentials(raw)
+    except ValueError as exc:raise URLSafetyError(str(exc)) from None
     if parsed.scheme not in {"http", "https"}:
         raise URLSafetyError("只允许 http/https 协议")
     host = (parsed.hostname or "").strip().lower().rstrip(".")
@@ -121,34 +125,32 @@ class FetchedItemAdapter(FetchedPage):
 def fetch_public_page(url: str) -> FetchedPage:
     """抓取公开网页。大小/超时/重定向均受 settings 限制。"""
     safe_url = validate_public_url(url)
-    headers = {
-        "User-Agent": settings.ingest_user_agent,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-    }
-    with httpx.Client(
-        timeout=settings.ingest_timeout_seconds,
-        follow_redirects=True,
-        max_redirects=settings.ingest_max_redirects,
-        headers=headers,
-    ) as client:
-        with client.stream("GET", safe_url) as response:
-            response.raise_for_status()
-            content_type = response.headers.get("content-type", "")
-            if content_type and not content_type.lower().startswith(("text/html", "application/xhtml", "text/plain")):
-                raise URLSafetyError(f"不支持的网页内容类型：{content_type.split(';')[0].strip()}")
-            declared = response.headers.get("content-length")
-            if declared and int(declared) > settings.ingest_max_bytes:
-                raise URLSafetyError("网页内容超过大小限制")
-            chunks: list[bytes] = []
-            received = 0
-            for chunk in response.iter_bytes():
-                received += len(chunk)
-                if received > settings.ingest_max_bytes:
-                    raise URLSafetyError("网页内容超过大小限制")
-                chunks.append(chunk)
-            html = b"".join(chunks).decode(response.encoding or "utf-8", errors="replace")
-    return parse_html(safe_url, str(response.url), response.status_code, content_type, html)
+    # 复用已有固定公网 IP 传输，避免“校验 DNS 后 HTTP 库再次解析”的重绑定窗口。
+    # 不引入 SDK/Chromium；Crawl4AI 的站点许可仍由其适配器单独执行。
+    from app.collectors.crawl_policy import SafeFetch, USER_AGENT
+    from urllib.parse import urljoin, urlsplit
+    client=SafeFetch({urlsplit(safe_url).hostname},timeout=settings.ingest_timeout_seconds,max_bytes=settings.ingest_max_bytes)
+    original=safe_url
+    for hop in range(settings.ingest_max_redirects+1):
+        host=urlsplit(safe_url).hostname
+        client.domains.add(host)
+        robot=client.robot(safe_url)
+        if not robot.can_fetch(USER_AGENT,safe_url):raise URLSafetyError('ROBOTS_DENIED')
+        client.interval=max(client.interval,float(robot.crawl_delay(USER_AGENT) or robot.crawl_delay('*') or 0))
+        response=client._one(safe_url)
+        if response.status in {301,302,303,307,308}:
+            location=response.headers.get('location')
+            if not location or hop==settings.ingest_max_redirects:raise URLSafetyError('REDIRECT_LIMIT')
+            safe_url=validate_public_url(urljoin(safe_url,location))
+            continue
+        if response.status>=400:
+            req=httpx.Request('GET',safe_url)
+            raise httpx.HTTPStatusError('HTTP_STATUS_FAILED',request=req,response=httpx.Response(response.status,request=req))
+        content_type=response.content_type
+        if content_type and not content_type.lower().startswith(('text/html','application/xhtml','text/plain')):
+            raise URLSafetyError('PDF_UNSUPPORTED' if 'pdf' in content_type.lower() else 'CONTENT_TYPE_NOT_ALLOWED')
+        return parse_html(original,safe_url,response.status,content_type,response.text())
+    raise URLSafetyError('REDIRECT_LIMIT')
 
 
 _DROP_TAGS = ("script", "style", "noscript", "svg", "iframe", "nav", "footer", "aside", "form", "template")
@@ -260,21 +262,42 @@ _TITLE_SPLITTERS = re.compile(r"\s*[|｜\-–—_·•]\s*|\s*[–—]\s*")
 
 
 def identify_company(page: FetchedPage) -> str | None:
-    """按优先级识别企业名：JSON-LD Organization > og:site_name > 域名。识别不了返回 None。"""
+    """按优先级识别企业名：JSON-LD Organization > og:site_name > 域名。识别不了返回 None。
+
+    T08.0 P0-1：Source Publisher ≠ Business Subject Company —— 命中数据来源平台域名
+    （ccgp.gov.cn、招聘/媒体网站等）时整个识别直接返回 None（包括 title fallback）：
+    平台页面上的"标题里像公司的词"（如采购单位名）由采购解析器结构化提取，不走猜测。
+    """
+    host = domain_of(page.final_url)
+    if host and is_source_platform_domain(host):
+        return None
     if page.organization and _plausible_name(page.organization):
         return page.organization
     if page.og_site_name and _plausible_name(page.og_site_name):
-        return page.og_site_name
-    host = domain_of(page.final_url)
+        # og:site_name 也可能是平台名（如"中国政府采购网"）→ 平台名不算业务主体
+        if not _is_platform_site_name(page.og_site_name):
+            return page.og_site_name
     if host:
         core = host.removeprefix("www.").split(".")[0]
         if core and not core.isdigit() and core not in {"com", "cn", "www"}:
             return core
     if page.title:
         candidate = _TITLE_SPLITTERS.split(page.title)[0].strip()
-        if _plausible_name(candidate) and len(candidate) <= 40:
+        if _plausible_name(candidate) and len(candidate) <= 40 and not _is_platform_site_name(candidate):
             return candidate
     return None
+
+
+_PLATFORM_SITE_NAME_PATTERN = re.compile(
+    r"(政府采购网|招标网|采购与招标网|招聘网|人才网|人才热线|新闻网|日报|晚报|新闻网|电视台|信息网|365|平台)", re.I
+)
+
+
+def _is_platform_site_name(name: str | None) -> bool:
+    """名称像数据来源平台（而非业务企业）→ 不作为被分析 Company。"""
+    if not name:
+        return False
+    return bool(_PLATFORM_SITE_NAME_PATTERN.search(name))
 
 
 def _plausible_name(name: str | None) -> bool:
@@ -313,7 +336,7 @@ _RULES: list[_Rule] = [
     _Rule("AI_HIRING", "AI人才招聘", [r"招聘.{0,10}(AI|人工智能|算法|大模型|机器学习|LLM|NLP)", r"(算法工程师|大模型工程师|AI工程师|机器学习工程师).{0,6}(招聘|急聘|热招)"], 80),
     _Rule("CUSTOMER_SERVICE_HIRING", "客服团队招聘", [r"招聘.{0,10}(客服|客户服务|客户成功|售后)", r"(客服专员|客户成功经理|售后服务).{0,6}(招聘|急聘)"], 72),
     _Rule("FINANCE_HIRING", "财务人员招聘", [r"招聘.{0,10}(财务|会计|审计|税务)", r"(财务经理|会计|审计员|税务专员).{0,6}(招聘|急聘)"], 70),
-    _Rule("HIRING", "招聘扩张", [r"(诚聘|急聘|热招|加入我们|join\s+us|we.?re\s+hiring|人才招聘|校园招聘|社会招聘)", r"招聘\d+名"], 62),
+    _Rule("HIRING", "招聘扩张", [r"(诚聘|诚邀英才|急聘|热招|加入我们|join\s+us|we.?re\s+hiring|人才招聘|校园招聘|社会招聘|职等你来)", r"招聘\d+名"], 62),
     _Rule("FUNDING", "融资事件", [r"完成.{0,10}(天使轮|Pre-[A-Z轮]|A\+?轮|B\+?轮|C\+?轮|战略融资|股权融资)", r"(获得|宣布).{0,12}(融资|投资)", r"(亿元|万美元|千万).{0,4}(融资|投资)"], 85),
     _Rule("OVERSEAS_EXPANSION", "海外扩张", [r"(出海|海外(市场|业务|扩张|布局|分公司|办事处)|进军国际|全球化战略|设立海外)", r"( opens? | launches? ).{0,20}(office|subsidiary).{0,20}(overseas|international)"], 75),
     _Rule("EXPANSION", "业务扩张", [r"(新(建|设|开)(工厂|基地|产线|分公司|办事处|中心)|扩(建|大)产能|产能扩张|规模扩大|增资扩产)"], 70),
@@ -334,19 +357,65 @@ _RULES: list[_Rule] = [
 
 _EXCERPT_WINDOW = 60
 
+# T08.0 P0-3：采购/招标上下文判定 —— 页面是采购/招标公告时，只允许采购族信号；
+# 不得因"采购产品"生成 NEW_PRODUCT，不得生成 POLICY_IMPACT 等误判类型。
+_PROCUREMENT_CONTEXT_PATTERN = re.compile(
+    r"(招标公告|中标公告|成交公告|采购公告|竞标公告|询价公告|磋商公告|招标编号|采购项目编号|"
+    r"公开招标|竞争性磋商|邀请招标|单一来源|采购项目|投标人|供应商资格)", re.I
+)
+# 采购上下文中被抑制的非采购类信号（任务书 P0-3：采购页面只能生成 PROCUREMENT/TENDER 族）
+_SUPPRESSED_IN_PROCUREMENT = {
+    "NEW_PRODUCT", "NEW_SERVICE", "NEW_MARKET", "NEW_FACTORY", "NEW_OFFICE",
+    "OVERSEAS_EXPANSION", "EXPANSION", "FUNDING", "PARTNERSHIP",
+    "STRATEGIC_COOPERATION", "MANAGEMENT_CHANGE", "POLICY_IMPACT",
+    "CUSTOMER_COMPLAINT", "COST_PRESSURE", "EFFICIENCY_PROBLEM",
+    "DIGITAL_TRANSFORMATION", "AI_TRANSFORMATION", "MANUAL_WORK", "DATA_PROBLEM",
+}
+
+
+def is_procurement_context(text: str | None) -> bool:
+    """页面是否为采购/招标公告（真实结构化上下文，非 LLM 猜测）。"""
+    if not text:
+        return False
+    return bool(_PROCUREMENT_CONTEXT_PATTERN.search(text[:60000]))
+
 
 def extract_signal_hits(page: FetchedPage) -> list[RuleHit]:
-    """规则引擎：从标题+正文识别真实发生的商业事件关键词。全部为“事实”级命中。"""
-    haystack = f"{page.title or ''}\n{page.meta_description or ''}\n{page.text[:60000]}"
+    """规则引擎：从标题+正文识别真实发生的商业事件关键词。全部为“事实”级命中。
+
+    T08.0 P0-3：采购/招标公告上下文中只保留采购族信号（PROCUREMENT/TENDER/需求族），
+    抑制 NEW_PRODUCT/POLICY_IMPACT 等误判类型。
+    T08.2：岗位 JD 页只保留招聘族；发展历程时间线页抑制历史事件类。
+    """
+    haystack = page.text[:60000]  # 证据偏移始终指向实际正文，不能混入标题/metadata。
+    procurement = is_procurement_context(haystack)
+    from app.analyzers.signal_rules import (
+        _HIRING_FAMILY_ALL,
+        _SUPPRESSED_IN_TIMELINE,
+        is_history_timeline_context,
+        is_job_description_context,
+    )
+
+    job_description = is_job_description_context(haystack)
+    timeline = is_history_timeline_context(haystack)
+    from app.services.evidence_quality import extract_valid_evidence
+
     hits: list[RuleHit] = []
     seen_types: set[str] = set()
     for rule in _RULES:
+        if procurement and rule.signal_type in _SUPPRESSED_IN_PROCUREMENT:
+            continue
+        if job_description and rule.signal_type not in _HIRING_FAMILY_ALL:
+            continue  # JD 页里"采购/AI/融资"字样不是企业事件
+        if timeline and rule.signal_type in _SUPPRESSED_IN_TIMELINE:
+            continue  # 发展历程页的历史事件不是近期信号
         match = rule.regex.search(haystack)
         if not match:
             continue
-        start = max(0, match.start() - _EXCERPT_WINDOW)
-        end = min(len(haystack), match.end() + _EXCERPT_WINDOW)
-        excerpt = re.sub(r"\s+", " ", haystack[start:end]).strip()
+        # T08.0 P0-2：Evidence 质量门 —— 导航/footer/热线窗口被替换为实质句；全低质则放弃该命中
+        excerpt = extract_valid_evidence(haystack, match.start(), match.end())
+        if not excerpt:
+            continue
         confidence = rule.confidence if match.group(0).count("\n") == 0 else max(50, rule.confidence - 15)
         hits.append(RuleHit(
             signal_type=rule.signal_type,

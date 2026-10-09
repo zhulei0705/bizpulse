@@ -53,11 +53,12 @@ def test_specific_hiring_shadows_generic():
 
 
 def test_new_factory_and_tender():
-    text = "公司宣布新建工厂扩大产能。同期某市政项目发布招标公告。"
+    # T08.0 P0-3：含"招标公告"的页面属采购上下文，只产采购族信号（另测）；此处为企业自身扩张新闻
+    text = "公司宣布新建工厂扩大产能。同期启动供应商招募计划，面向全国遴选合作伙伴。"
     drafts = run_signal_rules(text)
     types = {d.candidate_type for d in drafts}
     assert "NEW_FACTORY" in types
-    assert "TENDER" in types
+    assert "SUPPLIER_SEARCH" in types
 
 
 def test_empty_text_returns_empty():

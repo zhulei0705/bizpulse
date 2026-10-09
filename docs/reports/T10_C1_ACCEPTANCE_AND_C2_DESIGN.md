@@ -1,0 +1,92 @@
+# T10-C1 验收与 T10-C2 设计门禁报告
+
+验收日期：2026-10-08。项目：D:\myAI\bizpulse。结论：**FAIL**。现有 Crawl4AI 已集成，但证据一致性、发布时间传递、清洗、安全和禁止自动批准规则未满足验收要求。按用户门禁停止，不制定或开发 T10-C2。
+
+## 1. 当前状态与复用审计
+
+项目路径真实存在，原报告 `T10-C1_CRAWL4AI_INTEGRATION_REPORT.md` 存在并已阅读；其结论为技术验证部分通过，不能视为完成。Git 有大量既有未提交修改，验收未覆盖、撤销或提交这些修改；完整清单见 `t10_c1_acceptance/git_before.txt` 与 `git_after.txt`。
+
+已审计 README、依赖、Source/SourceRecord、Evidence、Signal、Opportunity、Job、采集注册和统一调度、质量门、Actionability、分析批准逻辑。拟复用现有 FastAPI/SQLAlchemy、采集注册与调度、SourceRecord 版本和内容去重、Evidence、既有质量门与人工审核。此次仅增加验收工具、日志和报告，不修改业务实现，不做数据库迁移。
+
+`crawl4ai_adapter.py`、`crawl_policy.py`、`crawl_fields.py`、`crawl4ai_worker.py` 已存在；注册可选 crawl4ai，由现有 collection_engine 调度。默认 HTTP，不无条件启动 Chromium；动态渲染要求诊断标记。网页数据只进入未核实记录，适配器不直接生成 Signal/Opportunity。HTTP、RSS、手动 URL 注册仍在；没有找到独立 API 来源适配器，API 接口与来源 API 通道不能混为一谈。CSV 等兼容性由现有全量测试覆盖，不能据此声称所有真实来源端到端已验证。
+
+实际项目虚拟环境：Crawl4AI **0.9.4**、Playwright **1.63.0**、psutil **7.2.2**，`pip check` 无依赖冲突；SDK 可选依赖固定在 requirements-crawl4ai.txt，锁文件记录安装环境。浏览器由项目 `.browsers` 初始化，方法见 backend/docs/CRAWL4AI.md。验收没有安装或修改全局 Python。
+
+## 2. 数据库隔离与业务数据保护
+
+测试 conftest 明确设置 `sqlite:///./data/bizpulse_test.db`，正式库为 backend/data/bizpulse.db；测试完成释放连接并删除测试库。正式库审计采用 SQLite mode=ro。前后比对全部 29 张业务表的行数及排序后内容 SHA256：一致=True。原有 91 个原文文件内容全部保持=True。
+
+T09 实验、客户及 READY_TO_CONTACT 状态包含在全表比对中，未变更；没有新建 Interaction、发送消息或批准正式机会。正式库已有 50 条 APPROVED Signal、40 条 CONTRACT_AWARD，是历史存量，不是本次输出。CONTRACT_AWARD 规则保持历史信号/不可行动；未转换为当前招标机会。采购日期、预算、供应商、参数缺失保持 UNKNOWN。
+
+## 3. 真实 URL 对照与停止记录
+
+**本次新增真实批量执行 0 条**：只读正式证据审计发现 4 条原文与 Evidence 偏移不一致，立即触发质量停止条件，未执行已准备的新增采集。禁止用旧数据冒充本轮新采集。
+
+复核上一轮真实执行的 20 个不同 URL（10 静态、10 JS），采集时间保留在原 ab_results.jsonl，原始/最终 URL、快照和许可元数据均保留。20 份快照验证及 200 个新适配器引用偏移全部通过。本次只验证归档，没有重新访问这些20页面。[网站所有者许可说明](https://toscrape.com/)说明该网站提供抓取沙盒。本轮业务场景新增样本 **0**；采购公告、招聘、新闻、技术资料及真实日期/主体准确率仍未验证，不能把沙盒引用当作商业证据。
+
+旧适配器对照复用了旧正文解析，但网络请求经过安全代理，不能声称原旧网络传输全链路未改动。噪声率是沙盒“非目标引用字符比例”，不是人工标注的业务正文噪声率。此前两次中断（DNS 与导航超时）在原报告保留，最终20条成功不意味着无执行失败。
+
+|URL|类型|旧/新获取|旧/新有效正文|旧/新引用数|旧/新耗时秒|新浏览器峰值MiB|
+|---|---|---|---|---|---|---|
+|https://quotes.toscrape.com/page/1/|STATIC_SANDBOX|True/True|True/True|10/10|3.321/3.843|未启动浏览器|
+|https://quotes.toscrape.com/page/2/|STATIC_SANDBOX|True/True|True/True|10/10|3.919/4.368|未启动浏览器|
+|https://quotes.toscrape.com/page/3/|STATIC_SANDBOX|True/True|True/True|10/10|3.623/3.887|未启动浏览器|
+|https://quotes.toscrape.com/page/4/|STATIC_SANDBOX|True/True|True/True|10/10|3.998/3.931|未启动浏览器|
+|https://quotes.toscrape.com/page/5/|STATIC_SANDBOX|True/True|True/True|10/10|4.014/3.99|未启动浏览器|
+|https://quotes.toscrape.com/page/6/|STATIC_SANDBOX|True/True|True/True|10/10|3.935/4.045|未启动浏览器|
+|https://quotes.toscrape.com/page/7/|STATIC_SANDBOX|True/True|True/True|10/10|3.853/4.037|未启动浏览器|
+|https://quotes.toscrape.com/page/8/|STATIC_SANDBOX|True/True|True/True|10/10|3.835/4.012|未启动浏览器|
+|https://quotes.toscrape.com/page/9/|STATIC_SANDBOX|True/True|True/True|10/10|4.068/3.907|未启动浏览器|
+|https://quotes.toscrape.com/page/10/|STATIC_SANDBOX|True/True|True/True|10/10|3.768/4.097|未启动浏览器|
+|https://quotes.toscrape.com/js/page/1/|JS_SANDBOX|True/True|False/True|0/10|3.922/16.078|462.95|
+|https://quotes.toscrape.com/js/page/2/|JS_SANDBOX|True/True|False/True|0/10|3.304/23.485|460.67|
+|https://quotes.toscrape.com/js/page/3/|JS_SANDBOX|True/True|False/True|0/10|3.128/15.754|460.01|
+|https://quotes.toscrape.com/js/page/4/|JS_SANDBOX|True/True|False/True|0/10|3.026/15.929|480.43|
+|https://quotes.toscrape.com/js/page/5/|JS_SANDBOX|True/True|False/True|0/10|3.058/15.976|459.76|
+|https://quotes.toscrape.com/js/page/6/|JS_SANDBOX|True/True|False/True|0/10|3.033/15.929|459.77|
+|https://quotes.toscrape.com/js/page/7/|JS_SANDBOX|True/True|False/True|0/10|3.103/19.457|456.1|
+|https://quotes.toscrape.com/js/page/8/|JS_SANDBOX|True/True|False/True|0/10|3.14/16.055|462.62|
+|https://quotes.toscrape.com/js/page/9/|JS_SANDBOX|True/True|False/True|0/10|3.136/16.166|460.05|
+|https://quotes.toscrape.com/js/page/10/|JS_SANDBOX|True/True|False/True|0/10|3.063/16.023|462.71|
+
+汇总（旧/新）：获取 20/20、20/20；有效正文 10/20、20/20；引用可追溯 100/200、200/200；平均噪声比例 68.21%/0.00%；平均耗时 3.5124/10.5484 秒；传输字节 173403/2291943。JS 有效正文由0/10恢复到10/10。SDK峰值是采样进程树RSS，非计费成本；CPU、网络和浏览器开销不能外推大规模成本。可用 Signal=0、Actionable Signal=0；商业严重主体误判数、日期主体准确率 **未验证**，不是0误判结论。
+
+## 4. 证据链与必须修复的问题
+
+正式库138条 SourceRecord、52条 SignalEvidence：48条精确偏移一致、**4条不一致**、5条声明快照缺失。完整记录ID与问题见 `t10_c1_acceptance/evidence_audit.json`。这些是本次只读发现的存量缺陷，不能直接归因 Crawl4AI；仍足以阻止全链路验收。不得改写原文使证据“通过”，应从可信原版本恢复或隔离缺陷证据，重做人工确认。
+
+|必须修复/补证|本次依据|复验条件|
+|---|---|---|
+|证据引用不一致与缺失快照|4条偏移不一致、5文件缺失|版本、哈希、精确引用一致；无法恢复的存量标记不可用并阻止下游采用|
+|CSS 分支导航/页脚过滤|离线 article 包含 nav/footer，两者留在正文；默认解析分支正确过滤|CSS 与默认路径均验证过滤，保留原始/清洗文本区别|
+|发布时间标准字段断链|2020-01-01被提取到metadata，但item/SourceRecord.published_at=None|可信显式日期进入标准链；不明时区保持未知，不能凭采集时间推定历史事件近期|
+|错误可行动性风险|上述离线 NEW_PRODUCT 的规则结果 ACTIONABLE_NOW|历史发布时间不能被丢弃，缺失事件时间不得当作已证实近期事件|
+|编码凭证 URL 防护|`?%74oken=OFFLINE_TEST_VALUE` 被 check_url 接受，未发送网络请求|规范解码后检查敏感键和重定向目标，日志不泄露凭证|
+|全局禁止自动批准未落地|Settings仅存在no_fake_data；分析器仍按置信度/来源等级自动批准Signal|NO_AUTO_APPROVAL实际覆盖所有采集衍生分析入口；既有人工审批可用且不误批|
+|相关测试失败与共享来源等级污染|手动来源预期C，实际A；其他测试会把共享来源升级A|明确可靠性继承业务规则并隔离测试，不通过改断言掩盖来源等级污染|
+|业务真实样本不足|20条均为引用沙盒，无采购/技术资料|修复证据门后合法来源重新对照；不足如实报告，日期/主体需人工真值|
+|PDF受控解析未验收|当前拒绝PDF，不将占位符当正文|若纳入验收需明确大小/页数/解析策略和失败证据；否则清楚限定为不支持|
+
+离线探针结果见 offline_probes.json，全部是明确标记的测试夹具，网络请求0、业务写入0，禁止计为真实样本。原始快照/清洗版本、原URL保留及归档哈希校验通过；上述结论不代表生产证据链整体合格。
+
+现有安全设计包含站点人工许可、robots、DNS公共地址与连接固定、同域重定向、资源/超时上限和浏览器请求截获；其既有自动测试不能代替真实各站点条款审查。失败回退和限流有测试覆盖，但真实商业动态站点的回退效果仍未验证。浏览器成功不等于合法可采集。网页指令不进入LLM执行。
+
+## 5. 本轮回归测试
+
+先运行16个采集/证据/归属/生命周期相关测试文件，再执行项目虚拟环境 `python -m pytest` 全量测试：
+
+- 采集相关：**1 failed, 158 passed, 4 warnings in 33.18s**。
+- 全量 pytest：**576 passed, 4 warnings in 64.18s (0:01:04)**。
+- 原始日志：collection_tests.txt、full_pytest.txt。
+
+相关测试失败：test_evidence_chain.py::test_ingest_records_reliability_snapshot_and_rejects_empty_page，期望来源快照C，实际A。共享手动来源等级在既有测试间会被升级，相关与全量测试顺序不同；不能仅凭全量通过忽略独立相关套件失败。已验证原有HTTP/RSS/API端点的自动测试，不据此宣称真实政府站点采集和全部主体归属正确。
+
+验收工具初次离线探针因未注册 ORM Company 模型失败，补齐工具初始化后重跑成功；不计入pytest失败，未修改业务代码。历史证据问题触发停止，不执行新增批量。
+
+## 6. T10-C1 结论与 T10-C2 门禁
+
+**T10-C1：FAIL。** 失败具有已复现的功能/安全缺陷和正式证据链不一致依据，而不只是外网样本阻塞。
+
+以下内容全部 **未启动**：T10-C2 ProcurementProject/ProcurementLifecycle/RequirementSpec/SupplierProduct/RequirementMatch/MatchExplanation/HumanReview 数据模型；跨公告生命周期、参数匹配算法、Evidence计算追溯、API、数据库迁移、分阶段开发任务和成本设计。按用户“FAIL或BLOCKED时停止，不设计后续实现任务”的明确门禁，本报告不提供这些后续方案。
+
+下一步仅建议修复并复验上述 T10-C1 阻断项，正式证据一致性恢复前不扩量；验收PASS后才单独制定最小C2方案。当前已停止，等待人工验收；无C2业务功能代码、自动触达或扩量。

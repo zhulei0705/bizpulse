@@ -50,7 +50,13 @@ def test_same_event_not_duplicated_across_runs(client):
         rec2.company_resolve_status = "EXACT"
         db.commit()
         run_extractor(db, rec1)
+        from app.analyzers.extractor import approve_candidate_manually
+        first=db.query(SignalCandidate).filter_by(source_record_id=rec1.id,candidate_type='SALES_HIRING').first()
+        approve_candidate_manually(db,first,actor='offline-test-reviewer')
         run_extractor(db, rec2)
+        second=db.query(SignalCandidate).filter_by(source_record_id=rec2.id,candidate_type='SALES_HIRING').first()
+        assert second.status=='REVIEW_REQUIRED'
+        approve_candidate_manually(db,second,actor='offline-test-reviewer')
         signals = db.query(Signal).filter(Signal.signal_type == "SALES_HIRING", Signal.company_id == company["id"]).all()
         assert len(signals) <= 1  # 同事件只有一个正式 Signal
         merged = db.query(SignalCandidate).filter(SignalCandidate.source_record_id == rec2.id, SignalCandidate.status == "MERGED").all()

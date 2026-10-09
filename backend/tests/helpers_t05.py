@@ -121,10 +121,17 @@ def persist_signal(
     db.add(signal)
     db.flush()
     if evidence_text:
+        # 离线夹具需自洽：证据先成为测试原文，再引用精确 Unicode 偏移。
+        # 不用于正式数据修复。
+        if evidence_text not in (record.raw_text or ''):
+            record.raw_text=(record.raw_text or '')+'\n'+evidence_text
+        start=record.raw_text.index(evidence_text)
         db.add(SignalEvidence(
             signal_id=signal.id,
             source_record_id=record.id,
             quoted_text=evidence_text,
+            start_offset=start,
+            end_offset=start+len(evidence_text),
             confidence=confidence,
         ))
     db.flush()

@@ -38,6 +38,14 @@ def create_source(payload: SourceCreate, db: Session = Depends(get_db)) -> dict:
     return {"success": True, "data": SourceRead.model_validate(source).model_dump(), "message": None}
 
 
+@router.get("/yield")
+def sources_yield(db: Session = Depends(get_db)) -> dict:
+    """T08 Source Yield：每个数据源的采集→Signal→Opportunity 产出链路（实时计算）。"""
+    from app.services.source_health import source_health, source_yield
+
+    return {"success": True, "data": {"yield": source_yield(db), "health": source_health(db)}, "message": None}
+
+
 @router.get("/{source_id}")
 def get_source(source_id: str, db: Session = Depends(get_db)) -> dict:
     source = db.get(Source, source_id)

@@ -80,6 +80,9 @@ def load_company_context(db: Session, company_id: str, *, now: datetime | None =
     records: dict[str, SourceRecord] = {}
     sources: dict[str, Source] = {}
     for signal in signals:
+        from app.services.evidence_integrity import signal_issues
+        if signal_issues(db, signal):
+            continue
         sc = SignalContext(signal=signal)
         sc.evidences = list(db.scalars(select(SignalEvidence).where(SignalEvidence.signal_id == signal.id)).all())
         record = records.get(signal.source_record_id)
@@ -92,7 +95,8 @@ def load_company_context(db: Session, company_id: str, *, now: datetime | None =
             if source is None:
                 source = db.get(Source, record.source_id)
                 sources[record.source_id] = source
-            sc.source_grade = (source.reliability_grade if source else "C") or "C"
+            from app.services.reliability import effective_grade
+            sc.source_grade = effective_grade(record.source_reliability or (source.reliability_grade if source else 'C'))
         ctx.signals.append(sc)
 
     ctx.contacts = list(db.scalars(select(CompanyContact).where(CompanyContact.company_id == company_id)).all())

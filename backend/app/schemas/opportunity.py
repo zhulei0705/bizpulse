@@ -29,6 +29,10 @@ class OpportunityCreate(ORMModel):
     confidence: int = Field(default=0, ge=0, le=100)
     stage: str = "NEW"
     owner: str | None = None
+    # T05/T06：可解释字段（创建时可携带；候选转换路径直接写入）
+    why_now: str | None = None
+    risk_notes: list = []
+    validation_questions: list = []
 
 
 class OpportunityRead(ORMModel):
@@ -76,6 +80,11 @@ class OpportunityRead(ORMModel):
     reviewed_at: datetime | None = None
     review_note: str | None = None
     reviewed_by: str | None = None
+    # T06 真实验证信息
+    observed_intent: str | None = None
+    confirmed_budget: str | None = None
+    last_contacted_at: datetime | None = None
+    contact_count: int = 0
     created_at: datetime
     updated_at: datetime
 
@@ -83,6 +92,17 @@ class OpportunityRead(ORMModel):
 class OpportunityStageUpdate(ORMModel):
     stage: str
     owner: str | None = None
+
+
+class OpportunityStageChangeRequest(ORMModel):
+    """T06 阶段流转请求：含状态机保护所需的辅助字段。"""
+
+    stage: str
+    owner: str | None = None
+    reject_reason: str | None = None
+    contract_amount: float | None = Field(default=None, ge=0)
+    force: bool = False
+    note: str | None = None
 
 
 class OpportunityEvidenceCreate(ORMModel):

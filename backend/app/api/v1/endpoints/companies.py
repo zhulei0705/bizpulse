@@ -77,6 +77,86 @@ def list_companies(
     }
 
 
+@router.get("/validation-ready")
+def validation_ready_companies(
+    organization_type: str | None = "COMPANY",
+    contact_ready_only: bool = False,
+    db: Session = Depends(get_db),
+) -> dict:
+    """T08 Validation Ready / Contact Ready 企业列表（条件明确代码化；organization_type=null 查全部）。"""
+    from app.services.validation_readiness import list_validation_ready
+
+    data = list_validation_ready(db, organization_type=organization_type, contact_ready_only=contact_ready_only)
+    return {"success": True, "data": data, "message": None}
+
+
+@router.get("/coverage/{company_id}")
+def company_coverage(company_id: str, db: Session = Depends(get_db)) -> dict:
+    """T08 Source Coverage：该企业官网/招聘/新闻/采购/联系人覆盖情况。"""
+    from app.services.company_quality import source_coverage
+
+    data = source_coverage(db, company_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return {"success": True, "data": data, "message": None}
+
+
+@router.get("/coverage")
+def companies_coverage(
+    organization_type: str | None = "COMPANY",
+    missing: str | None = None,
+    db: Session = Depends(get_db),
+) -> dict:
+    """T08.2 企业覆盖审计（任务书三十四）：missing=news|careers|contact|products|solutions 过滤缺口。"""
+    from app.services.company_coverage import coverage_audit_all, coverage_gap
+
+    missing_key = {"news": "news_covered", "careers": "careers_covered", "contact": "contact_covered",
+                   "products": "products_covered", "solutions": "solutions_covered",
+                   "homepage": "homepage_covered", "procurement": "procurement_covered"}.get(missing or "")
+    items = coverage_audit_all(db, organization_type=organization_type)
+    if missing_key:
+        items = [a for a in items if not a.get(missing_key)]
+    return {
+        "success": True,
+        "data": {"total": len(items),
+                 "with_gap": sum(1 for a in items if coverage_gap(a)),
+                 "items": items},
+        "message": None,
+    }
+
+
+@router.get("/enrichment-priority")
+def enrichment_priority_list(
+    organization_type: str = "COMPANY",
+    limit: int = 20,
+    db: Session = Depends(get_db),
+) -> dict:
+    """T08.2 补全优先级 Top N（任务书六：代码权重计算，不用 LLM）。"""
+    from app.services.company_coverage import top_enrichment_targets
+
+    items = top_enrichment_targets(db, organization_type=organization_type, limit=limit)
+    return {"success": True, "data": {"total": len(items), "items": items}, "message": None}
+
+
+@router.post("/{company_id}/enrich")
+def enrich_company_endpoint(
+    company_id: str,
+    payload: dict | None = None,
+    db: Session = Depends(get_db),
+) -> dict:
+    """T08.2 单企业深挖（任务书三十五）：Discovery → Fetch → Parse → Signal → Contact。"""
+    from fastapi import HTTPException as _HTTPException
+
+    from app.services.enrichment_runner import enrich_company
+
+    company = db.get(Company, company_id)
+    if not company:
+        raise _HTTPException(status_code=404, detail="Company not found")
+    max_pages = int((payload or {}).get("max_pages", 12))
+    summary = enrich_company(db, company, max_pages=max(1, min(max_pages, 20)))
+    return {"success": True, "data": summary, "message": None}
+
+
 @router.post("")
 def create_company(payload: CompanyCreate, db: Session = Depends(get_db)) -> dict:
     normalized = payload.normalized_name or _normalize_name(payload.company_name)

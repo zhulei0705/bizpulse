@@ -31,7 +31,7 @@ class CollectedItem:
     content_type: str | None = None
     language: str | None = None
     author: str | None = None
-    parse_status: str = "OK"           # OK / FAILED
+    parse_status: str = "PARSE_SUCCESS"  # FETCH_SUCCESS/PARSE_SUCCESS/PARSE_EMPTY/JS_RENDER_REQUIRED/FAILED
     error_message: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)  # Adapter 私有补充字段
 
@@ -73,6 +73,8 @@ class CollectorAdapter(ABC):
 
     # ---- 公共工具 ----
     def log(self, url: str, status: str, latency_ms: int = 0, **extra: Any) -> None:
+        from app.services.url_safety import safe_url_for_log
+        url = safe_url_for_log(url)
         entry = {"url": url, "status": status, "latency_ms": latency_ms, "at": datetime.now(timezone.utc).isoformat(), **extra}
         self.run_log.append(entry)
         logger.info("collector=%s source=%s %s %s (%dms)", self.collector_type, getattr(self.source, "id", "?"), status, url, latency_ms)

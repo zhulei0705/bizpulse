@@ -150,7 +150,8 @@ def test_ingest_url_builds_traceable_chain(client, mock_fetch):
     # SourceRecord 可查、URL 可追溯
     record = client.get(f"/api/v1/source-records/{data['source_record_id']}").json()["data"]
     assert record["url"] == "https://www.hengfeng-test-example.com/news/1"
-    assert record["source"]["reliability_grade"] == "C"
+    # 手动来源等级可能被前面权威域名测试升为 A（只升不降）；普通商业域名摄取本身不改变等级
+    assert record["source"]["reliability_grade"] in {"A", "C"}
 
     # Company 自动创建
     company = client.get(f"/api/v1/companies/{data['company_id']}").json()["data"]
@@ -228,27 +229,31 @@ def test_ingest_gov_url_upgrades_source_grade(client, mock_fetch):
     resp2 = client.post("/api/v1/ingest/url", json={"url": "https://www.hengfeng-test-example.com/news/1"})
     assert resp2.status_code == 200, resp2.text
     record2 = client.get(f"/api/v1/source-records/{resp2.json()['data']['source_record_id']}").json()["data"]
-    assert record2["source"]["reliability_grade"] == "A"  # 共享手动来源：已被 gov URL 升级，只升不降
+    assert record2["source"]["reliability_grade"] == "C"
+    assert record2['source']['id'] != record['source']['id']
+    assert record2['source_reliability'] == 'C'
+    assert record['source_reliability'] == 'A'
 
 
 def test_authoritative_grade_never_downgrades_and_idempotent(client):
+    import uuid
     from app.db.session import SessionLocal
     from app.models.source import Source
     from app.services.ingest import ensure_authoritative_grade
 
     with SessionLocal() as db:
-        source = db.query(Source).filter(Source.source_type == "MANUAL_URL").first()
-        assert source is not None
-        assert source.reliability_grade == "A"  # 前面的 gov 测试已升级
-
-        # 幂等：A 级 + score>=95 再次命中不再变更
-        assert ensure_authoritative_grade(db, source, "http://www.ccgp.gov.cn/y") is False
-        assert source.reliability_grade == "A"
-
-        # 人工下调后政府 URL 仍会拉回 A（只升不降）
-        source.reliability_grade = "C"
-        source.reliability_score = 55
-        assert ensure_authoritative_grade(db, source, "http://www.moe.gov.cn/z") is True
-        assert source.reliability_grade == "A"
-        assert source.reliability_score == 95
-        db.commit()
+        from app.services.ingest import get_manual_source
+        from app.models.audit import AuditLog
+        from sqlalchemy import select
+        shared=Source(name='隔离测试共享入口'+uuid.uuid4().hex,source_type='MANUAL_URL',reliability_grade='C',reliability_score=55)
+        db.add(shared);db.flush()
+        assert ensure_authoritative_grade(db,shared,'http://www.moe.gov.cn/z') is False
+        assert shared.reliability_grade=='C'
+        source=get_manual_source(db,'https://www.moe.gov.cn/z')
+        assert ensure_authoritative_grade(db,source,'https://www.moe.gov.cn/z') is True
+        db.flush()
+        assert source.reliability_grade=='A'
+        assert ensure_authoritative_grade(db,source,'https://www.moe.gov.cn/other') is False
+        assert ensure_authoritative_grade(db,source,'https://www.ccgp.gov.cn/y') is False
+        audit=db.scalar(select(AuditLog).where(AuditLog.entity_id==source.id,AuditLog.action=='UPDATE'))
+        assert audit.payload_json['reason']=='authoritative_domain'

@@ -50,7 +50,11 @@ def _is_authoritative_domain(url: str) -> bool:
 
 def ensure_authoritative_grade(db: Session, source: Source, url: str) -> bool:
     """手动 URL 命中权威域名且来源等级偏低时自动升级（只升不降，人工可再调）。"""
-    if not _is_authoritative_domain(url):
+    # 共享/跨域手动入口不是权威平台，单条政府记录不能提升整个入口。
+    host = extractor.domain_of(url)
+    if not source.base_url or extractor.domain_of(source.base_url) != host or not _is_authoritative_domain(url):
+        return False
+    if any(extractor.domain_of(r.url) != host for r in source.records):
         return False
     if source.reliability_grade == "A" and source.reliability_score >= 95:
         return False
@@ -84,14 +88,15 @@ def _normalize_name(name: str) -> str:
     return "".join(name.lower().split())
 
 
-def get_manual_source(db: Session) -> Source:
-    source = db.scalar(select(Source).where(Source.source_type == MANUAL_SOURCE_TYPE))
+def get_manual_source(db: Session, url: str | None = None) -> Source:
+    origin = extractor.site_origin(url) if url else None
+    source = db.scalar(select(Source).where(Source.source_type == MANUAL_SOURCE_TYPE, Source.base_url == origin))
     if source:
         return source
     source = Source(
-        name=MANUAL_SOURCE_NAME,
+        name=MANUAL_SOURCE_NAME + (f' · {extractor.domain_of(url)}' if url else ''),
         source_type=MANUAL_SOURCE_TYPE,
-        base_url=None,
+        base_url=origin,
         reliability_grade="C",
         reliability_score=55,
         enabled=True,
@@ -100,6 +105,7 @@ def get_manual_source(db: Session) -> Source:
     )
     db.add(source)
     db.flush()
+    write_audit(db, 'CREATE', 'source', source.id, {'reason': 'manual_url_domain_isolation', 'domain': extractor.domain_of(url) if url else None, 'grade': 'C'})
     return source
 
 
@@ -151,12 +157,17 @@ def create_rule_signals(db: Session, company: Company | None, record: SourceReco
             collected_at=datetime.now(timezone.utc),
             confidence=hit.confidence,
             reliability_score=_source_score(db, record.source_id),
-            status="VALID",
+            status="REVIEW",
             fact_or_inference="FACT",
             payload_json={"extractor": "rule_engine_v1", "excerpt": hit.excerpt},
         )
         db.add(signal)
         db.flush()
+        from app.models.signal import SignalEvidence
+        from app.services.evidence_integrity import locate_exact
+        span = locate_exact(record.raw_text or '', hit.excerpt)
+        if span:
+            db.add(SignalEvidence(signal_id=signal.id, source_record_id=record.id, quoted_text=hit.excerpt, start_offset=span[0], end_offset=span[1], confidence=hit.confidence))
         signals.append(signal)
     if signals:
         write_audit(db, "CREATE", "signal", signals[0].id, {"count": len(signals), "via": "rule_engine", "source_record_id": record.id})
@@ -172,7 +183,7 @@ def ingest_url(db: Session, url: str, note: str = "") -> "IngestResult":
     from app.collectors import ManualUrlCollector
     from app.services.collection_engine import persist_collected
 
-    manual_source = get_manual_source(db)
+    manual_source = get_manual_source(db, url)
     ensure_authoritative_grade(db, manual_source, url)
     adapter = ManualUrlCollector(manual_source, {"url": url})
     adapter.validate_config()
@@ -185,6 +196,10 @@ def ingest_url(db: Session, url: str, note: str = "") -> "IngestResult":
             # 网络 / HTTP 失败（含 401/403 访问受限不绕过）→ 502
             raise RuntimeError(item.error_message)
         raise extractor.URLSafetyError(item.error_message or "页面无可提取的有效正文内容，拒绝入库")
+    # T08.0 P1-2：正文为空 / JS 渲染页不得作为业务数据来源（PARSE_EMPTY / JS_RENDER_REQUIRED）
+    if item.parse_status in {"PARSE_EMPTY", "JS_RENDER_REQUIRED"} or not (item.raw_text or "").strip():
+        detail = "页面为 JS 渲染，需浏览器采集后人工导入正文" if item.parse_status == "JS_RENDER_REQUIRED" else "页面无可提取的有效正文内容，拒绝入库"
+        raise extractor.URLSafetyError(detail)
 
     if note:
         item.extra["note"] = note
@@ -225,7 +240,7 @@ def ingest_url(db: Session, url: str, note: str = "") -> "IngestResult":
                     collected_at=datetime.now(timezone.utc),
                     confidence=insight.confidence,
                     reliability_score=manual_source.reliability_score,
-                    status="VALID",
+                    status="REVIEW",
                     fact_or_inference="FACT",
                     payload_json={"extractor": "llm", "evidence_excerpt": insight.evidence_excerpt},
                 )

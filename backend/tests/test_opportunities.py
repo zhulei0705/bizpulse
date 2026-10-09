@@ -80,13 +80,22 @@ def test_list_opportunities_filters(client, company_signal_record):
 
 
 def test_stage_update_and_legacy_mapping(client, company_signal_record):
+    """T06 状态机保护：未审核机会禁止进入验证阶段；审核通过后可逐步流转；旧枚举自动映射。"""
     company, signal, _ = company_signal_record
     opp = client.post("/api/v1/opportunities", json=_payload(company["id"], signal["id"])).json()["data"]
 
+    # 未人工审核通过（review_status=PENDING）→ 禁止直接进入验证阶段
+    blocked = client.patch(f"/api/v1/opportunities/{opp['id']}/stage", json={"stage": "CONTACTED"})
+    assert blocked.status_code == 422
+    assert "人工审核" in blocked.json()["detail"]
+
+    # 人工审核通过 → READY，之后可推进到 CONTACTED
+    approved = client.post(f"/api/v1/opportunities/{opp['id']}/review", json={"action": "approve", "note": "验收"})
+    assert approved.status_code == 200
     resp = client.patch(f"/api/v1/opportunities/{opp['id']}/stage", json={"stage": "CONTACTED"})
     assert resp.json()["data"]["stage"] == "CONTACTED"
 
-    # 旧枚举 PENDING_REVIEW 自动映射为 REVIEW
+    # 旧枚举 PENDING_REVIEW 自动映射为 REVIEW（回退允许）
     resp = client.patch(f"/api/v1/opportunities/{opp['id']}/stage", json={"stage": "PENDING_REVIEW"})
     assert resp.json()["data"]["stage"] == "REVIEW"
 

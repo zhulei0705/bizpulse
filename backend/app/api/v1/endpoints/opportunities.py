@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.constants import LEGACY_STAGE_MAP, OPPORTUNITY_STAGES
 from app.db.session import get_db
 from app.models.company import Company
-from app.models.opportunity import Opportunity, OpportunityEvidence
+from app.models.opportunity import Opportunity, OpportunityEvidence, OpportunityFeedback
 from app.models.signal import Signal
 from app.models.source import Source, SourceRecord
 from app.schemas.opportunity import (
@@ -15,8 +15,10 @@ from app.schemas.opportunity import (
     OpportunityEvidenceCreate,
     OpportunityRead,
     OpportunityReviewRequest,
+    OpportunityStageChangeRequest,
     OpportunityStageUpdate,
 )
+from app.schemas.experiment import ConfirmBudgetRequest
 from app.services.audit import write_audit
 from app.services.scoring import OpportunityScoreInput, calculate_opportunity_score
 
@@ -109,6 +111,8 @@ def create_opportunity(payload: OpportunityCreate, db: Session = Depends(get_db)
     primary_signal = db.get(Signal, payload.primary_signal_id)
     if not primary_signal:
         raise HTTPException(status_code=422, detail="primary_signal_id does not exist")
+    from app.services.evidence_integrity import signal_issues
+    if signal_issues(db,primary_signal):raise HTTPException(status_code=422,detail='INVALID_EVIDENCE：不得由失效证据创建或评分新机会')
     if payload.stage not in VALID_STAGES:
         raise HTTPException(status_code=422, detail=f"Invalid stage, allowed: {', '.join(sorted(VALID_STAGES))}")
 
@@ -197,6 +201,9 @@ def review_opportunity(opportunity_id: str, payload: OpportunityReviewRequest, d
     before: dict = {"stage": opportunity.stage, "review_status": opportunity.review_status}
 
     if payload.action in {"approve", "ready"}:
+        from app.services.evidence_integrity import opportunity_issues
+        issues=opportunity_issues(db, opportunity)
+        if issues:raise HTTPException(status_code=422, detail={'code': 'INVALID_EVIDENCE', 'reasons': issues})
         opportunity.stage = "READY"
         opportunity.review_status = "APPROVED"
         _verify_opportunity_evidence(db, opportunity.id, now)
@@ -219,6 +226,9 @@ def review_opportunity(opportunity_id: str, payload: OpportunityReviewRequest, d
             raise HTTPException(status_code=422, detail="action=edit 时必须提供 updates 字段")
         updates = payload.updates.model_dump(exclude_unset=True)
         score_fields = {"pain_score", "budget_score", "intent_score", "urgency_score", "agent_fit_score", "reachability_score", "evidence_score"}
+        if score_fields & updates.keys():
+            from app.services.evidence_integrity import opportunity_issues
+            if opportunity_issues(db,opportunity):raise HTTPException(status_code=422,detail='INVALID_EVIDENCE：隔离机会禁止重新评分')
         if updates:
             for key, value in updates.items():
                 before[key] = getattr(opportunity, key)
@@ -273,20 +283,129 @@ def _verify_opportunity_evidence(db: Session, opportunity_id: str, verified_at: 
 
 
 @router.patch("/{opportunity_id}/stage")
-def update_stage(opportunity_id: str, payload: OpportunityStageUpdate, db: Session = Depends(get_db)) -> dict:
+def update_stage(opportunity_id: str, payload: OpportunityStageChangeRequest, db: Session = Depends(get_db)) -> dict:
+    """机会验证阶段流转（T06 状态机保护：未审核不得进入验证、禁止大跨度跳跃、WON 需真实合同金额）。"""
+    from app.services.validation import TransitionDenied, validate_opportunity_stage_transition
+
     stage = _normalize_stage(payload.stage)
-    if stage not in VALID_STAGES:
-        raise HTTPException(status_code=422, detail=f"Invalid stage, allowed: {', '.join(sorted(VALID_STAGES))}")
     opportunity = db.get(Opportunity, opportunity_id)
     if not opportunity:
         raise HTTPException(status_code=404, detail="Opportunity not found")
+    try:
+        validate_opportunity_stage_transition(
+            db, opportunity, stage,
+            reject_reason=payload.reject_reason,
+            contract_amount=payload.contract_amount,
+            force=payload.force,
+            note=payload.note,
+        )
+    except TransitionDenied as exc:
+        db.rollback()
+        raise exc
+    before = opportunity.stage
     opportunity.stage = stage
+    if payload.reject_reason and stage == "REJECTED":
+        opportunity.reject_reason = payload.reject_reason
     if payload.owner is not None:
         opportunity.owner = payload.owner
-    write_audit(db, "STAGE_CHANGE", "opportunity", opportunity.id, {"stage": stage, "owner": payload.owner})
+    write_audit(db, "STAGE_CHANGE", "opportunity", opportunity.id, {
+        "before": before, "stage": stage, "owner": payload.owner,
+        "reject_reason": payload.reject_reason, "force": payload.force, "note": payload.note,
+    })
     db.commit()
     db.refresh(opportunity)
     return {"success": True, "data": _serialize_with_counts(db, opportunity), "message": None}
+
+
+@router.post("/{opportunity_id}/add-to-experiment")
+def add_to_experiment(opportunity_id: str, payload: dict, db: Session = Depends(get_db)) -> dict:
+    """机会加入实验（任务书五十四）：必须人工审核通过（READY 及之后）。"""
+    from app.models.experiment import Experiment, ExperimentOpportunity, ExperimentTarget
+    experiment_id = (payload or {}).get("experiment_id")
+    if not experiment_id:
+        raise HTTPException(status_code=422, detail="experiment_id is required")
+    opportunity = db.get(Opportunity, opportunity_id)
+    if not opportunity:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    experiment = db.get(Experiment, experiment_id)
+    if not experiment:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    if opportunity.review_status != "APPROVED":
+        raise HTTPException(status_code=422, detail="机会尚未人工审核通过（review_status != APPROVED），不能加入实验")
+    if opportunity.stage not in {"READY", "CONTACTED", "REPLIED", "MEETING", "QUOTED", "PILOT"}:
+        raise HTTPException(status_code=422, detail="机会需处于 READY（已审核待验证）或之后阶段")
+
+    duplicate = db.scalar(select(ExperimentOpportunity).where(
+        ExperimentOpportunity.experiment_id == experiment_id,
+        ExperimentOpportunity.opportunity_id == opportunity_id,
+    ))
+    if duplicate:
+        raise HTTPException(status_code=409, detail="该机会已在此实验中")
+    db.add(ExperimentOpportunity(experiment_id=experiment_id, opportunity_id=opportunity_id))
+    target = db.scalar(select(ExperimentTarget).where(
+        ExperimentTarget.experiment_id == experiment_id,
+        ExperimentTarget.company_id == opportunity.company_id,
+    ))
+    created_target = False
+    if target is None:
+        target = ExperimentTarget(
+            experiment_id=experiment_id,
+            company_id=opportunity.company_id,
+            opportunity_id=opportunity_id,
+            added_at=datetime.now(timezone.utc),
+        )
+        db.add(target)
+        experiment.target_company_count = (experiment.target_company_count or 0) + 1
+        created_target = True
+    else:
+        target.opportunity_id = target.opportunity_id or opportunity_id
+    db.flush()
+    write_audit(db, "ADD_TO_EXPERIMENT", "experiment_target", target.id, {
+        "experiment_id": experiment_id, "opportunity_id": opportunity_id,
+        "company_id": opportunity.company_id, "target_created": created_target,
+    })
+    db.commit()
+    return {
+        "success": True,
+        "data": {"experiment_id": experiment_id, "opportunity_id": opportunity_id, "target_id": target.id, "target_created": created_target},
+        "message": None,
+    }
+
+
+@router.get("/{opportunity_id}/feedback")
+def get_opportunity_feedback(opportunity_id: str, db: Session = Depends(get_db)) -> dict:
+    """预测 vs 真实结果反馈（T06 只积累数据用于校准分析，不自动训练模型）。"""
+    opportunity = db.get(Opportunity, opportunity_id)
+    if not opportunity:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    rows = db.scalars(select(OpportunityFeedback).where(OpportunityFeedback.opportunity_id == opportunity_id).order_by(OpportunityFeedback.feedback_at.desc())).all()
+    data = [{
+        "id": f.id, "target_id": f.target_id,
+        "predicted_score": f.predicted_score, "predicted_grade": f.predicted_grade,
+        "actual_reply": f.actual_reply, "actual_meeting": f.actual_meeting,
+        "actual_quote": f.actual_quote, "actual_pilot": f.actual_pilot,
+        "actual_win": f.actual_win, "actual_revenue": f.actual_revenue,
+        "reject_reason": f.reject_reason, "notes": f.notes,
+        "feedback_at": f.feedback_at.isoformat() if f.feedback_at else None,
+    } for f in rows]
+    return {"success": True, "data": data, "message": None}
+
+
+@router.post("/{opportunity_id}/confirm-budget")
+def confirm_opportunity_budget(opportunity_id: str, payload: ConfirmBudgetRequest, db: Session = Depends(get_db)) -> dict:
+    """预算确认：客户明确说出的预算原文；必须引用一条 INBOUND 互动作为依据。"""
+    from app.services.validation import TransitionDenied, confirm_budget
+
+    opportunity = db.get(Opportunity, opportunity_id)
+    if not opportunity:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    try:
+        opportunity = confirm_budget(db, opportunity, budget_text=payload.budget_text, interaction_id=payload.interaction_id)
+    except TransitionDenied as exc:
+        db.rollback()
+        raise exc
+    db.commit()
+    return {"success": True, "data": {"id": opportunity.id, "confirmed_budget": opportunity.confirmed_budget}, "message": None}
 
 
 @router.post("/{opportunity_id}/evidences")

@@ -36,7 +36,7 @@ def test_web_collector_fetch_and_fields(mock_page):
     items = adapter.build_records()
     assert len(items) == 1
     item = items[0]
-    assert item.parse_status == "OK"
+    assert item.parse_status == "PARSE_SUCCESS"
     assert item.title == "测试企业 - 招聘"
     assert "海外销售经理" in item.raw_text
     assert item.canonical_url == canonicalize_url(FakeSource.base_url)
@@ -44,37 +44,21 @@ def test_web_collector_fetch_and_fields(mock_page):
     assert adapter.run_log and adapter.run_log[0]["status"] == "HTTP_200"
 
 
-def test_web_collector_saves_raw_html(mock_page):
-    from app.collectors import web as webmod
-    from app.core.config import BASE_DIR
+def test_web_collector_saves_raw_html(mock_page, tmp_path):
     adapter = get_adapter("web_page", FakeSource)
-    original = webmod.WebPageCollector._save_raw_html
-    saved = {}
-
-    def _fake_save(self, hint, url, html):
-        path = original(self, hint, url, html)
-        saved["path"] = path
-        return path
-
-    webmod.WebPageCollector._save_raw_html = _fake_save
-    try:
-        items = adapter.build_records()
-        assert items[0].extra["raw_html_path"].startswith("data")
-        assert "raw" in items[0].extra["raw_html_path"]
-    finally:
-        webmod.WebPageCollector._save_raw_html = original
-    # 清理测试写入的 raw 目录
-    import shutil
-    raw_dir = BASE_DIR / "data" / "raw"
-    if raw_dir.exists():
-        shutil.rmtree(raw_dir, ignore_errors=True)
+    items = adapter.build_records()
+    assert items[0].extra["raw_html_path"].startswith("data")
+    assert "raw" in items[0].extra["raw_html_path"]
+    path = tmp_path / items[0].extra["raw_html_path"]
+    assert path.is_file()
+    assert path.read_text(encoding="utf-8") == HTML
 
 
 def test_web_collector_empty_page_marks_failed(monkeypatch):
     monkeypatch.setattr(extractor, "fetch_public_page", lambda url: extractor.parse_html(url, url, 200, "text/html", "<html><body>  </body></html>"))
     adapter = get_adapter("web_page", FakeSource)
     items = adapter.build_records()
-    assert items[0].parse_status == "FAILED"
+    assert items[0].parse_status == "PARSE_EMPTY"
     assert "正文" in items[0].error_message
 
 
@@ -82,6 +66,7 @@ def test_web_collector_network_failure_returns_failed_item(monkeypatch):
     monkeypatch.setattr(extractor, "fetch_public_page", lambda url: (_ for _ in ()).throw(RuntimeError("connection refused")))
     adapter = get_adapter("web_page", FakeSource, {"max_retries": 0})
     items = adapter.build_records()
+    # 网络失败语义保持 FAILED（区别于解析空 PARSE_EMPTY）
     assert items[0].parse_status == "FAILED"
     assert "connection refused" in items[0].error_message
 

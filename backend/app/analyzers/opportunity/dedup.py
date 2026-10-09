@@ -18,6 +18,9 @@ from app.core.config import settings
 from app.models.opportunity_candidate import OpportunityCandidate
 
 _ACTIVE_CANDIDATE_STATUSES = ("DETECTED", "NEED_MORE_EVIDENCE", "REVIEW")
+# 终态候选：人工已处理（approve=CONVERTED / reject=REJECTED / APPROVED），fingerprint 全局唯一，
+# 重新分析不得重建同指纹候选（否则 UNIQUE 冲突且覆盖人工决策）。
+_FINALIZED_CANDIDATE_STATUSES = ("CONVERTED", "APPROVED", "REJECTED")
 
 
 def compute_candidate_fingerprint(
@@ -56,6 +59,20 @@ def find_active_candidate(db: Session, fingerprint: str) -> OpportunityCandidate
         if now - anchor <= timedelta(days=window):
             return candidate
     return None
+
+
+def find_finalized_candidate(db: Session, fingerprint: str) -> OpportunityCandidate | None:
+    """同指纹的已终态候选（CONVERTED/APPROVED/REJECTED）。
+
+    fingerprint 有全局唯一约束：活跃候选查不到时若存在终态候选，直接 INSERT 会撞
+    UNIQUE（真实数据 force 重分析时发现）。终态候选代表人工决策已完成，应跳过重建。
+    """
+    return db.scalar(
+        select(OpportunityCandidate).where(
+            OpportunityCandidate.fingerprint == fingerprint,
+            OpportunityCandidate.status.in_(_FINALIZED_CANDIDATE_STATUSES),
+        ).order_by(OpportunityCandidate.updated_at.desc()).limit(1)
+    )
 
 
 def compute_analysis_input_hash(

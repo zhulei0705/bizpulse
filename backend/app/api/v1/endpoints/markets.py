@@ -32,6 +32,23 @@ def list_markets(
     return {"success": True, "data": {"items": [MarketRead.model_validate(x).model_dump() for x in items], "total": total, "page": page, "page_size": page_size}, "message": None}
 
 
+@router.get("/validation-candidates")
+def validation_candidates(min_companies: int = Query(default=1, ge=1), db: Session = Depends(get_db)) -> dict:
+    """T07 市场验证候选（Market Validation Ranking）。
+
+    从真实数据库按细分场景（机会 pain_category）聚合排序；系统只输出推荐候选与
+    排序依据，**哪个市场进入第一轮验证由人工决定**（不落库、不自动创建实验）。
+    """
+    from app.services.market_validation import data_sufficiency, market_validation_candidates
+
+    candidates = market_validation_candidates(db, min_companies=min_companies)
+    return {
+        "success": True,
+        "data": {"candidates": candidates, "total": len(candidates), "sufficiency": data_sufficiency(db)},
+        "message": None,
+    }
+
+
 @router.post("")
 def create_market(payload: MarketCreate, db: Session = Depends(get_db)) -> dict:
     if db.scalar(select(Market).where(Market.slug == payload.slug)):

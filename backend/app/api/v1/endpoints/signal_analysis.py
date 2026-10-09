@@ -29,6 +29,7 @@ router = APIRouter(tags=["signal-analysis"])
 
 class ReviewNote(BaseModel):
     note: str | None = Field(default=None, max_length=1000)
+    actor: str = Field(default='local-user', min_length=1, max_length=100)
 
 
 # ---------------------------------------------------------------------------
@@ -141,7 +142,7 @@ def approve_candidate(candidate_id: str, payload: ReviewNote | None = None, db: 
     if candidate.status in {"APPROVED", "MERGED", "REJECTED"}:
         raise HTTPException(status_code=409, detail=f"候选已处理（{candidate.status}）")
     try:
-        signal = approve_candidate_manually(db, candidate, note=payload.note if payload else None, reject=False)
+        signal = approve_candidate_manually(db, candidate, note=payload.note if payload else None, reject=False, actor=payload.actor if payload else 'local-user')
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"success": True, "data": {"candidate_id": candidate.id, "signal_id": signal.id if signal else None, "status": "APPROVED"}, "message": None}
@@ -188,10 +189,14 @@ def approve_signal(signal_id: str, payload: ReviewNote | None = None, db: Sessio
     if not signal:
         raise HTTPException(status_code=404, detail="Signal not found")
     before = {"status": signal.status, "verification_status": signal.verification_status}
+    if payload and not payload.actor.strip():raise HTTPException(status_code=422,detail='人工审核 actor 不能为空')
+    from app.services.evidence_integrity import signal_issues
+    issues = signal_issues(db, signal)
+    if issues:raise HTTPException(status_code=422, detail={'code': 'INVALID_EVIDENCE', 'reasons': issues})
     signal.status = "APPROVED"
     signal.verification_status = "VERIFIED"
     signal.last_verified_at = datetime.now(timezone.utc)
-    write_audit(db, "SIGNAL_APPROVED", "signal", signal.id, {"before": before, "after": {"status": "APPROVED"}, "note": payload.note if payload else None})
+    write_audit(db, "SIGNAL_APPROVED", "signal", signal.id, {"before": before, "after": {"status": "APPROVED"}, "note": payload.note if payload else None, 'reviewed_at': datetime.now(timezone.utc).isoformat()}, actor=payload.actor if payload else 'local-user')
     db.commit()
     return {"success": True, "data": {"id": signal.id, "status": "APPROVED"}, "message": None}
 

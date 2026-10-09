@@ -146,6 +146,39 @@ def test_approve_converts_and_zero_evidence_blocked():
         db.close()
 
 
+def test_force_reanalysis_after_convert_skips_finalized():
+    """真实数据发现的 bug 回归：候选已 CONVERTED 后 force 重新分析，
+    不得重建同指纹候选（fingerprint UNIQUE 冲突 → 500），应跳过并保留人工决策。"""
+    db = SessionLocal()
+    try:
+        company = _seed(db, name_suffix=f"重分析{utcnow()}", grade="A", signals_spec=[
+            ("TENDER", 90, "招标公告：采购智能客服系统，项目预算：500万元"),
+        ])
+        analyze_company_opportunities(db, company.id, force=True)
+        candidate = db.query(OpportunityCandidate).filter_by(company_id=company.id).first()
+        assert candidate is not None
+
+        from fastapi.testclient import TestClient
+        from app.main import app
+        with TestClient(app) as client:
+            resp = client.post(f"/api/v1/opportunity-candidates/{candidate.id}/approve", json={"note": "验收"})
+            assert resp.status_code == 200, resp.text
+
+        db.refresh(candidate)
+        assert candidate.status == "CONVERTED"
+
+        # force 重新分析：同 fingerprint 终态候选 → 跳过，不 INSERT、不 500
+        stats = analyze_company_opportunities(db, company.id, force=True)
+        assert stats.status == "ANALYZED"
+        assert stats.candidates_created == 0
+        candidates = db.query(OpportunityCandidate).filter_by(company_id=company.id).all()
+        assert len(candidates) == 1, "同指纹终态候选存在时不得新建"
+        assert candidates[0].status == "CONVERTED"
+        assert stats.reason == "candidates_finalized(1)"
+    finally:
+        db.close()
+
+
 def test_batch_job_and_stale():
     """批量分析 job 可运行；STALE 清扫把 90 天无信号的正式机会标记过期。"""
     db = SessionLocal()

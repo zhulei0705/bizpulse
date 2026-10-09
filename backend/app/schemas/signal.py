@@ -17,7 +17,7 @@ class SignalCreate(ORMModel):
     confidence: int = Field(default=0, ge=0, le=100)
     reliability_score: int = Field(default=0, ge=0, le=100)
     heat_score: float | None = Field(default=None, ge=0, le=100)
-    status: str = "VALID"
+    status: str = "REVIEW"
     fact_or_inference: str = "FACT"
     payload_json: dict = Field(default_factory=dict)
     # 人工录入时允许直接给证据 URL，后端自动生成 SourceRecord（保证可追溯）

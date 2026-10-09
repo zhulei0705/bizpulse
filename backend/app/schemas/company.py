@@ -58,5 +58,11 @@ class CompanyRead(ORMModel):
     opportunity_level: str | None
     status: str
     source_count: int
+    # T08 企业池扩充
+    organization_type: str = "UNKNOWN"
+    verification_status: str = "UNVERIFIED"
+    company_data_quality: int = 0
+    discovery_source_url: str | None = None
+    verified_at: datetime | None = None
     created_at: datetime
     updated_at: datetime

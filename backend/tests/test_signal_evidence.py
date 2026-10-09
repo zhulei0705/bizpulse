@@ -7,7 +7,7 @@ from app.analyzers.extractor import _evidence_in_source
 def test_evidence_in_source_exact_and_flattened():
     source = "公司计划于2026年第四季度新增100名销售人员，覆盖华东市场。"
     assert _evidence_in_source("新增100名销售人员", source) is True
-    assert _evidence_in_source("公司计划于2026年第四季度\n新增100名销售人员", "公司计划于2026年第四季度 新增100名销售人员。") is True  # 换行容忍
+    assert _evidence_in_source("公司计划于2026年第四季度\n新增100名销售人员", "公司计划于2026年第四季度 新增100名销售人员。") is False  # 不能混用版本/改写空白
     assert _evidence_in_source("企业正在大规模扩张销售团队", source) is False  # AI 改写句不在原文
     assert _evidence_in_source(None, source) is False
     assert _evidence_in_source("   ", source) is False

@@ -1,0 +1,4 @@
+# 可选采集 SDK；在项目 .venv 安装。原有 requirements.txt 保持可独立运行。
+crawl4ai==0.9.4
+playwright==1.63.0
+psutil==7.2.2

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, new_id
@@ -63,12 +63,21 @@ class Opportunity(TimestampMixin, Base):
     review_note: Mapped[str | None] = mapped_column(Text)
     reviewed_by: Mapped[str | None] = mapped_column(String(100))
 
+    # ---- T06：真实验证字段 ----
+    # 真实观察到的购买意图（OBSERVED_INTENTS），与预测 intent_score 严格区分
+    observed_intent: Mapped[str | None] = mapped_column(String(30))
+    confirmed_budget: Mapped[str | None] = mapped_column(String(200))  # 客户明确说出的预算；没说保持 NULL
+    # 真实验证信息（由 Interaction 聚合，last_contacted_at 冗余存储便于列表展示）
+    last_contacted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    contact_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
     company: Mapped["Company"] = relationship(back_populates="opportunities")
     market: Mapped["Market | None"] = relationship(back_populates="opportunities")
     primary_signal: Mapped["Signal | None"] = relationship()
     pain_point: Mapped["PainPoint | None"] = relationship()
     evidences: Mapped[list["OpportunityEvidence"]] = relationship(back_populates="opportunity", cascade="all, delete-orphan")
     interactions: Mapped[list["Interaction"]] = relationship(back_populates="opportunity")
+    feedback: Mapped[list["OpportunityFeedback"]] = relationship(back_populates="opportunity", cascade="all, delete-orphan")
 
 
 class OpportunityEvidence(Base):
@@ -86,3 +95,29 @@ class OpportunityEvidence(Base):
     source_grade: Mapped[str | None] = mapped_column(String(1))
 
     opportunity: Mapped[Opportunity] = relationship(back_populates="evidences")
+
+
+class OpportunityFeedback(Base):
+    """T06 预测反馈闭环：原 Opportunity Score vs 真实验证结果。
+
+    只积累数据用于校准分析（任务书明确：不自动改权重、不在线训练）。
+    """
+
+    __tablename__ = "opportunity_feedback"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=lambda: new_id("ofb"))
+    opportunity_id: Mapped[str] = mapped_column(ForeignKey("opportunities.id", ondelete="CASCADE"), index=True)
+    target_id: Mapped[str | None] = mapped_column(String(32), index=True)
+    predicted_score: Mapped[float] = mapped_column(Float, nullable=False)
+    predicted_grade: Mapped[str | None] = mapped_column(String(5))
+    actual_reply: Mapped[bool | None] = mapped_column(Boolean)
+    actual_meeting: Mapped[bool | None] = mapped_column(Boolean)
+    actual_quote: Mapped[bool | None] = mapped_column(Boolean)
+    actual_pilot: Mapped[bool | None] = mapped_column(Boolean)
+    actual_win: Mapped[bool | None] = mapped_column(Boolean)
+    actual_revenue: Mapped[float | None] = mapped_column(Float)
+    reject_reason: Mapped[str | None] = mapped_column(String(50))
+    notes: Mapped[str | None] = mapped_column(Text)
+    feedback_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+
+    opportunity: Mapped[Opportunity] = relationship(back_populates="feedback")

@@ -24,9 +24,32 @@ backend/data/*.db-shm
 backend/data/*.db-wal
 backend/data/raw/
 backend/logs/
+backend/.browsers/
+backend/data/crawl4ai_cache/
+backend/data/crawl_permissions.json
 
 # IDE / 系统
 .idea/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# 本地运行/调试文件
+*.log
+backend/_*.py
+backend/_*.txt
+backend/%SystemDrive%/
+
+# 研究原文、数据库审计快照和运行明细仅保存在本地；提交 Markdown 报告
+docs/reports/**/*.html
+docs/reports/**/*.bin
+docs/reports/**/*.json
+docs/reports/**/*.jsonl
+docs/reports/**/*.txt
+backend/docs/reports/**/*.html
+backend/docs/reports/**/*.bin
+backend/docs/reports/**/*.json
+backend/docs/reports/**/*.jsonl
+backend/docs/reports/**/*.txt
+# 内部客户审阅/触达草稿不发布到代码仓库
+backend/docs/reports/

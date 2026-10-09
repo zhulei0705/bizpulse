@@ -8,6 +8,7 @@ from __future__ import annotations
 from app.collectors.base import CollectedItem, CollectorAdapter
 from app.collectors.rss import RSSCollector
 from app.collectors.web import ManualUrlCollector, WebPageCollector
+from app.collectors.crawl4ai_adapter import Crawl4AIAdapter
 
 _REGISTRY: dict[str, type[CollectorAdapter]] = {}
 
@@ -20,6 +21,7 @@ def register(adapter_cls: type[CollectorAdapter]) -> type[CollectorAdapter]:
 register(WebPageCollector)
 register(RSSCollector)
 register(ManualUrlCollector)
+register(Crawl4AIAdapter)
 
 
 def get_adapter(collector_type: str | None, source, config: dict | None = None) -> CollectorAdapter:
